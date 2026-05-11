@@ -1,0 +1,12 @@
+.openclaw/
+.env
+.env.*
+*.key
+*.pem
+secrets.json
+credentials.json
+api_keys.json
+.DS_Store
+__pycache__/
+node_modules/
+SOUL.backup.md
