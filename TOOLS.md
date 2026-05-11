@@ -117,6 +117,20 @@ When file changes are requested, the agent should explain what it plans to chang
 
 ---
 
+## Local File Access
+
+The Priority Governor Agent may read local workspace files for context.
+
+Default file access is read-only.
+
+The agent may not create, edit, rename, delete, or move files unless Cody explicitly asks it to perform that specific file action.
+
+If Cody asks for a file change, the agent should explain what it plans to change before making the change.
+
+The agent should not modify workspace configuration files, agent identity files, or tool boundary files unless Cody specifically asks.
+
+---
+
 ## Current Priorities Access
 
 For version 1, the agent uses:
