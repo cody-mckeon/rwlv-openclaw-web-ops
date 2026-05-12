@@ -13,7 +13,54 @@ from skills.asana.actions.read_tasks import read_project_tasks
 
 DEFAULT_OUTPUT_PATH = "CURRENT_PRIORITIES.generated.md"
 
+# Add Custom Field Helpers for Priority Fix
+def _get_custom_field_value(task: Dict[str, Any], field_name: str) -> Optional[str]:
+    """Return a custom field display value by field name."""
+    target = field_name.strip().lower()
 
+    for field in task.get("custom_fields", []) or []:
+        name = (field.get("name") or "").strip().lower()
+        if name == target:
+            return field.get("display_value")
+
+    return None
+
+
+def _get_status(task: Dict[str, Any]) -> str:
+    return _get_custom_field_value(task, "Status") or "No Status"
+
+
+def _get_priority(task: Dict[str, Any]) -> str:
+    return _get_custom_field_value(task, "Priority") or "No Priority"
+
+
+def _get_work_type(task: Dict[str, Any]) -> str:
+    return _get_custom_field_value(task, "Work Type") or "No Work Type"
+
+
+def _get_target_ship(task: Dict[str, Any]) -> str:
+    return _get_custom_field_value(task, "Target Ship") or "No Target Ship"
+
+
+def _has_section(task: Dict[str, Any], section_name: str) -> bool:
+    target = section_name.strip().lower()
+    return any(section.strip().lower() == target for section in _get_section_names(task))
+
+
+def _is_status(task: Dict[str, Any], *statuses: str) -> bool:
+    task_status = _get_status(task).strip().lower()
+    return task_status in {status.strip().lower() for status in statuses}
+
+
+def _is_priority(task: Dict[str, Any], *priorities: str) -> bool:
+    task_priority = _get_priority(task).strip().lower()
+    return task_priority in {priority.strip().lower() for priority in priorities}
+
+
+def _is_work_type(task: Dict[str, Any], *work_types: str) -> bool:
+    task_work_type = _get_work_type(task).strip().lower()
+    return task_work_type in {work_type.strip().lower() for work_type in work_types}
+    
 def _get_section_names(task: Dict[str, Any]) -> List[str]:
     """Return all section names associated with an Asana task."""
     sections: List[str] = []
@@ -55,9 +102,17 @@ def _task_line(task: Dict[str, Any]) -> str:
     assignee = _get_assignee_name(task)
     due = _get_due_value(task) or "No due date"
     sections = ", ".join(_get_section_names(task))
+    status = _get_status(task)
+    priority = _get_priority(task)
+    work_type = _get_work_type(task)
+    target_ship = _get_target_ship(task)
 
-    return f"- {name} | Assignee: {assignee} | Due: {due} | Section: {sections}"
-
+    return (
+        f"- {name} | Assignee: {assignee} | Due: {due} | "
+        f"Section: {sections} | Status: {status} | "
+        f"Priority: {priority} | Work Type: {work_type} | "
+        f"Target Ship: {target_ship}"
+    )
 
 def _sort_tasks(tasks: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     """
@@ -75,83 +130,110 @@ def _sort_tasks(tasks: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
 
 def classify_tasks(tasks: List[Dict[str, Any]]) -> Dict[str, List[Dict[str, Any]]]:
     """
-    Classify Asana tasks into broad priority/context groups.
+    Classify Asana tasks using structured Asana fields first.
 
-    This is intentionally conservative.
-    It does not invent true business priority from weak data.
-    It uses section names and due dates as signals.
+    Priority logic:
+    1. Section is the strongest operational signal.
+    2. Status confirms or contradicts the section.
+    3. Priority and Work Type add business context.
+    4. Due dates and target ship dates add urgency.
+    5. Task-name keywords are not enough to create P0.
     """
 
     open_tasks = [task for task in tasks if _is_open(task)]
 
-    p0_critical: List[Dict[str, Any]] = []
+    p0_critical_confirmed: List[Dict[str, Any]] = []
     p1_active: List[Dict[str, Any]] = []
-    p2_scheduled: List[Dict[str, Any]] = []
-    p3_backlog: List[Dict[str, Any]] = []
+    p1_active_needs_cleanup: List[Dict[str, Any]] = []
+    p2_intake_needs_triage: List[Dict[str, Any]] = []
+    p2_scheduled_or_due: List[Dict[str, Any]] = []
+    p3_backlog_low: List[Dict[str, Any]] = []
     blocked_or_waiting: List[Dict[str, Any]] = []
     due_dated: List[Dict[str, Any]] = []
+    hygiene_flags: List[Dict[str, Any]] = []
 
     for task in open_tasks:
-        section_names = _get_section_names(task)
-        task_name = (task.get("name") or "").lower()
         due = _get_due_value(task)
+        status = _get_status(task).lower()
+        priority = _get_priority(task).lower()
+        work_type = _get_work_type(task).lower()
+        task_name = (task.get("name") or "").lower()
+
+        in_intake = _has_section(task, "Intake")
+        in_progress = _has_section(task, "In Progress")
+        in_scheduled = _has_section(task, "Scheduled")
 
         if due:
             due_dated.append(task)
 
-        # Blocked/waiting signals
-        if _section_matches(section_names, ["blocked", "waiting", "on hold"]) or any(
-            word in task_name for word in ["blocked", "waiting", "on hold"]
+        # Blocked/waiting should be separated before normal prioritization.
+        if (
+            "blocked" in status
+            or "waiting" in status
+            or "on hold" in status
+            or "blocked" in task_name
+            or "waiting" in task_name
+            or _section_matches(_get_section_names(task), ["blocked", "waiting", "on hold"])
         ):
             blocked_or_waiting.append(task)
             continue
 
-        # P0 signals should stay narrow.
+        # P0 should be confirmed by structured fields, not just task name.
+        # Keep this narrow.
+        if (
+            _is_priority(task, "Critical", "P0")
+            or _is_status(task, "Critical", "Emergency")
+        ):
+            p0_critical_confirmed.append(task)
+            continue
+
+        # In Progress section takes precedence.
+        if in_progress:
+            if _is_status(task, "In Progress", "Ready for Work", "Ready", "Active"):
+                p1_active.append(task)
+            else:
+                p1_active_needs_cleanup.append(task)
+                hygiene_flags.append(task)
+            continue
+
+        # Scheduled section or dated work.
+        if in_scheduled or due or _get_target_ship(task) != "No Target Ship":
+            p2_scheduled_or_due.append(task)
+            continue
+
+        # Intake section needs triage. Priority/work type can affect how seriously it is reviewed,
+        # but it should not automatically interrupt active work.
+        if in_intake:
+            p2_intake_needs_triage.append(task)
+            continue
+
+        # Low priority tasks are backlog by default.
+        if _is_priority(task, "Low") and not due:
+            p3_backlog_low.append(task)
+            continue
+
+        # New builds, analytics, optimization, maintenance, etc. are useful,
+        # but without active/scheduled signals they are P2 review items.
         if any(
-            word in task_name
-            for word in [
-                "urgent",
-                "critical",
-                "broken",
-                "outage",
-                "emergency",
-                "booking broken",
-            ]
-        ) or _section_matches(section_names, ["p0", "critical", "urgent"]):
-            p0_critical.append(task)
-            continue
-
-        # Active work signals.
-        if _section_matches(
-            section_names,
-            ["in progress", "active", "doing", "current", "launch", "scheduled"],
+            value in work_type
+            for value in ["new build", "analytics", "optimization", "maintenance", "redesign"]
         ):
-            p1_active.append(task)
+            p2_intake_needs_triage.append(task)
             continue
 
-        # Scheduled/planned work.
-        if due or _section_matches(
-            section_names,
-            ["scheduled", "next up", "ready", "approved", "planned"],
-        ):
-            p2_scheduled.append(task)
-            continue
-
-        # Intake/backlog style work.
-        if _section_matches(section_names, ["intake", "backlog", "ideas", "triage"]):
-            p3_backlog.append(task)
-            continue
-
-        # Default to P2 instead of pretending everything is urgent.
-        p2_scheduled.append(task)
+        # Default: do not pretend unknown work is urgent.
+        p2_intake_needs_triage.append(task)
 
     return {
-        "p0_critical": _sort_tasks(p0_critical),
+        "p0_critical_confirmed": _sort_tasks(p0_critical_confirmed),
         "p1_active": _sort_tasks(p1_active),
-        "p2_scheduled": _sort_tasks(p2_scheduled),
-        "p3_backlog": _sort_tasks(p3_backlog),
+        "p1_active_needs_cleanup": _sort_tasks(p1_active_needs_cleanup),
+        "p2_intake_needs_triage": _sort_tasks(p2_intake_needs_triage),
+        "p2_scheduled_or_due": _sort_tasks(p2_scheduled_or_due),
+        "p3_backlog_low": _sort_tasks(p3_backlog_low),
         "blocked_or_waiting": _sort_tasks(blocked_or_waiting),
         "due_dated": _sort_tasks(due_dated),
+        "hygiene_flags": _sort_tasks(hygiene_flags),
         "open_tasks": _sort_tasks(open_tasks),
     }
 
@@ -197,28 +279,42 @@ def render_current_priorities_markdown(
     lines.append(f"- Total tasks pulled: {len(tasks)}")
     lines.append(f"- Open tasks: {len(classified['open_tasks'])}")
     lines.append(f"- Tasks with due dates: {len(classified['due_dated'])}")
+    lines.append(f"- P0 critical confirmed: {len(classified['p0_critical_confirmed'])}")
+    lines.append(f"- P1 active: {len(classified['p1_active'])}")
+    lines.append(f"- P1 active needing cleanup: {len(classified['p1_active_needs_cleanup'])}")
+    lines.append(f"- P2 intake needing triage: {len(classified['p2_intake_needs_triage'])}")
     lines.append("")
 
     sections = [
         (
-            "P0 / Critical",
-            classified["p0_critical"],
-            "Tasks that appear urgent, critical, broken, or production-impacting.",
+            "P0 / Critical Confirmed",
+            classified["p0_critical_confirmed"],
+            "Only tasks with explicit Critical/P0 priority or Critical/Emergency status. Task-name keywords alone do not qualify.",
         ),
         (
-            "P1 / Active Launches and Committed Work",
+            "P1 / Active In Progress",
             classified["p1_active"],
-            "Tasks that appear active, in progress, launch-related, or currently scheduled.",
+            "Tasks in the In Progress section with an active status such as In Progress, Ready for Work, Ready, or Active.",
         ),
         (
-            "P2 / Scheduled or Important Work",
-            classified["p2_scheduled"],
-            "Tasks that appear planned, due-dated, approved, or important but not clearly critical.",
+            "P1 Review / Active but Field Mismatch",
+            classified["p1_active_needs_cleanup"],
+            "Tasks in the In Progress section where Status does not confirm active work. These may need Asana field cleanup.",
         ),
         (
-            "P3 / Intake or Backlog",
-            classified["p3_backlog"],
-            "Tasks that appear to be intake, backlog, triage, or lower-urgency work.",
+            "P2 / Intake Needs Triage",
+            classified["p2_intake_needs_triage"],
+            "Tasks in Intake or reviewable work that should be prioritized, clarified, scheduled, or deferred.",
+        ),
+        (
+            "P2 / Scheduled or Due-Dated",
+            classified["p2_scheduled_or_due"],
+            "Tasks with due dates, target ship dates, or Scheduled section placement.",
+        ),
+        (
+            "P3 / Backlog or Low Priority",
+            classified["p3_backlog_low"],
+            "Low-priority or low-urgency work that should not interrupt active work.",
         ),
         (
             "Blocked / Waiting",
@@ -229,6 +325,11 @@ def render_current_priorities_markdown(
             "Due-Dated Tasks",
             classified["due_dated"],
             "Open tasks with due dates. These may need priority review.",
+        ),
+        (
+            "Asana Hygiene Flags",
+            classified["hygiene_flags"],
+            "Tasks where section/status/priority signals appear inconsistent.",
         ),
     ]
 
