@@ -33,3 +33,10 @@ Required:
 ```bash
 export ASANA_ACCESS_TOKEN="your_token_here"
 export ASANA_MODE="read_only"
+
+## Generate Current Priorities Snapshot
+
+After exporting the required environment variables, run:
+
+```bash
+python3 -m skills.asana.actions.generate_current_priorities
