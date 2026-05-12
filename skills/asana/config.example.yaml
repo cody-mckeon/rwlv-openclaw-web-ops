@@ -1,0 +1,27 @@
+# skills/asana/config.example.yaml
+
+asana:
+  mode: read_only
+
+  environment_variables:
+    access_token: ASANA_ACCESS_TOKEN
+    workspace_gid: ASANA_WORKSPACE_GID
+    test_project_gid: ASANA_TEST_PROJECT_GID
+
+  allowed_operations:
+    - read_project_tasks
+    - summarize_project_tasks
+
+  blocked_operations:
+    - create_task
+    - update_task
+    - delete_task
+    - comment_on_task
+    - move_task
+    - assign_task
+    - change_due_date
+
+  notes:
+    - Asana PATs are not truly scoped read-only.
+    - Read-only behavior is enforced in local code using ASANA_MODE=read_only.
+    - For true scoped access later, use OAuth scopes such as tasks:read and projects:read.
