@@ -10,3 +10,5 @@ api_keys.json
 __pycache__/
 node_modules/
 SOUL.backup.md
+HEARTBEAT.priority_governor.md
+HEARTBEAT.priority_governor.md
