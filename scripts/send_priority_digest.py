@@ -11,7 +11,7 @@ from urllib.parse import urlencode
 from urllib.request import Request, urlopen
 
 
-WORKSPACE_ROOT = Path("/Users/cody.mckeon/.openclaw/workspace")
+WORKSPACE_ROOT = Path(__file__).resolve().parents[1]
 PRIORITIES_FILE = WORKSPACE_ROOT / "CURRENT_PRIORITIES.generated.md"
 HEARTBEAT_FILE = WORKSPACE_ROOT / "HEARTBEAT.priority_digest.md"
 
@@ -67,40 +67,49 @@ def extract_section(markdown: str, heading: str, max_items: int = 5) -> List[str
 
     return task_bullets[:max_items]
 
+def _extract_field(text: str, label: str, default: str) -> str:
+    """
+    Extract a labeled field from a generated task line.
+
+    Example:
+    | Assignee: Cody | Due: No due date | Section: In Progress
+    """
+    pattern = rf"\| {re.escape(label)}: (.*?)(?= \| [A-Za-z ]+:|$)"
+    match = re.search(pattern, text)
+    return match.group(1).strip() if match else default
+
 
 def shorten_task_line(line: str) -> str:
     """
     Make generated task lines easier to read in Telegram.
-    Original:
-    - Task name | Assignee: Name | Due: Date | Section: X | Status: Y | Priority: Z | Work Type: A
+
+    This version preserves task names that contain pipe characters.
     """
     if line == "- None found." or "Assignee:" not in line:
         return line
 
     text = line.removeprefix("- ").strip()
-    parts = [part.strip() for part in text.split("|")]
 
-    task_name = parts[0] if parts else text
+    # Everything before " | Assignee:" is the real task name.
+    task_name = text.split(" | Assignee:", 1)[0].strip()
 
-    due = "No due date"
-    assignee = "Unassigned"
-    status = "No Status"
-    priority = "No Priority"
-    work_type = "No Work Type"
+    assignee = _extract_field(text, "Assignee", "Unassigned")
+    due = _extract_field(text, "Due", "No due date")
+    section = _extract_field(text, "Section", "No Section")
+    status = _extract_field(text, "Status", "No Status")
+    priority = _extract_field(text, "Priority", "No Priority")
+    work_type = _extract_field(text, "Work Type", "No Work Type")
+    target_ship = _extract_field(text, "Target Ship", "No Target Ship")
 
-    for part in parts[1:]:
-        if part.startswith("Due:"):
-            due = part.replace("Due:", "").strip()
-        elif part.startswith("Assignee:"):
-            assignee = part.replace("Assignee:", "").strip()
-        elif part.startswith("Status:"):
-            status = part.replace("Status:", "").strip()
-        elif part.startswith("Priority:"):
-            priority = part.replace("Priority:", "").strip()
-        elif part.startswith("Work Type:"):
-            work_type = part.replace("Work Type:", "").strip()
+    timing = f"Due: {due}"
+    if target_ship != "No Target Ship":
+        timing = f"Target: {target_ship} | {timing}"
 
-    return f"- {task_name}\n  Due: {due} | Assignee: {assignee} | Status: {status} | Priority: {priority} | Type: {work_type}"
+    return (
+        f"- {task_name}\n"
+        f"  {timing} | Owner: {assignee}\n"
+        f"  Status: {status} | Priority: {priority} | Type: {work_type} | Section: {section}"
+    )
 
 
 def format_section(title: str, items: List[str]) -> str:
@@ -108,30 +117,63 @@ def format_section(title: str, items: List[str]) -> str:
     return f"{title}\n" + "\n".join(cleaned)
 
 
+def filter_items_containing(items: List[str], keywords: List[str], max_items: int = 5) -> List[str]:
+    matched = []
+    for item in items:
+        lower = item.lower()
+        if any(keyword.lower() in lower for keyword in keywords):
+            matched.append(item)
+
+    return matched[:max_items] if matched else ["- None found."]
+
+
 def build_digest(markdown: str) -> str:
     today = datetime.now().strftime("%A, %B %-d, %Y")
 
-    active = extract_section(markdown, "P1 / Active In Progress", max_items=5)
-    due = extract_section(markdown, "Due-Dated Tasks", max_items=5)
-    intake = extract_section(markdown, "P2 / Intake Needs Triage", max_items=5)
-    hygiene = extract_section(markdown, "Asana Hygiene Flags", max_items=5)
+    active = extract_section(markdown, "P1 / Active In Progress", max_items=20)
+    active_cleanup = extract_section(markdown, "P1 Review / Active but Field Mismatch", max_items=10)
+    due = extract_section(markdown, "Due-Dated Tasks", max_items=10)
+    intake = extract_section(markdown, "P2 / Intake Needs Triage", max_items=10)
+    hygiene = extract_section(markdown, "Asana Hygiene Flags", max_items=10)
+
+    critical_active = filter_items_containing(
+        active + active_cleanup,
+        ["Priority: Critical", "Priority: High", "Compliance", "Booking", "Book Now", "Consent"],
+        max_items=5,
+    )
+
+    ready_for_review = filter_items_containing(
+        active + active_cleanup + due,
+        ["Status: Ready", "Ready for", "Section: QA", "QA"],
+        max_items=5,
+    )
+
+    # Keep the displayed digest short.
+    active_display = active[:5]
+    due_display = due[:5]
+    intake_display = intake[:5]
+    hygiene_display = hygiene[:5]
 
     message_parts = [
         f"Priority Governor Daily Brief\n{today}",
         "",
-        format_section("1. Active in-progress work", active),
+        format_section("1. Critical / high-priority active work", critical_active),
         "",
-        format_section("2. Due-dated tasks", due),
+        format_section("2. Active in-progress work", active_display),
         "",
-        format_section("3. Intake items needing triage", intake),
+        format_section("3. Due-dated / target ship items", due_display),
         "",
-        format_section("4. Asana hygiene flags", hygiene),
+        format_section("4. Ready for QA / review", ready_for_review),
         "",
-        "5. Suggested focus for today",
-        "- Protect active in-progress work before accepting new intake.",
-        "- Review due-dated tasks for anything that needs a tradeoff decision.",
-        "- Clarify vague intake items before they become execution work.",
-        "- Fix Asana field mismatches when section/status/priority do not agree.",
+        format_section("5. Intake needing triage", intake_display),
+        "",
+        format_section("6. Asana hygiene flags", hygiene_display),
+        "",
+        "7. Suggested focus for today",
+        "- Protect In Progress and QA work before accepting new Intake.",
+        "- Review Critical/High priority items first, especially compliance, booking, consent, and launch-related work.",
+        "- Use Intake as a triage queue, not an automatic work queue.",
+        "- Clean up tasks where Section and Status do not match.",
     ]
 
     return "\n".join(message_parts)
@@ -174,7 +216,7 @@ def main() -> None:
 
     if not PRIORITIES_FILE.exists():
         raise FileNotFoundError(
-            f"Missing {PRIORITIES_FILE}. Run update_priorities.sh first."
+            f"Missing {PRIORITIES_FILE}. Run the Asana priority generator first."
         )
 
     markdown = PRIORITIES_FILE.read_text(encoding="utf-8")
