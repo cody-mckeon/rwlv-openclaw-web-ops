@@ -133,23 +133,38 @@ def build_digest(markdown: str) -> str:
     active = extract_section(markdown, "P1 / Active In Progress", max_items=20)
     active_cleanup = extract_section(markdown, "P1 Review / Active but Field Mismatch", max_items=10)
     due = extract_section(markdown, "Due-Dated Tasks", max_items=10)
+    ready = extract_section(markdown, "Ready for QA / Review", max_items=10)
     intake = extract_section(markdown, "P2 / Intake Needs Triage", max_items=10)
     hygiene = extract_section(markdown, "Asana Hygiene Flags", max_items=10)
 
     critical_active = filter_items_containing(
         active + active_cleanup,
-        ["Priority: Critical", "Priority: High", "Compliance", "Booking", "Book Now", "Consent"],
+        [
+            "Priority: Critical",
+            "Priority: P0",
+            "P0 -",
+            "Priority: High",
+            "Priority: P1",
+            "P1 -",
+            "Compliance",
+            "Booking",
+            "Book Now",
+            "Consent",
+        ],
         max_items=5,
     )
 
     ready_for_review = filter_items_containing(
-        active + active_cleanup + due,
-        ["Status: Ready", "Ready for", "Section: QA", "QA"],
+        ready + active + active_cleanup + due,
+        ["Status: Ready", "Ready for", "Section: QA", "QA", "Ready to Launch"],
         max_items=5,
     )
 
     # Keep the displayed digest short.
-    active_display = active[:5]
+    active_candidates = [
+        item for item in active + active_cleanup if item != "- None found."
+    ]
+    active_display = active_candidates[:5] if active_candidates else ["- None found."]
     due_display = due[:5]
     intake_display = intake[:5]
     hygiene_display = hygiene[:5]
