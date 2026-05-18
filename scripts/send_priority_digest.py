@@ -259,6 +259,13 @@ def fallback_if_empty(items: List[str]) -> List[str]:
     ]
     return cleaned if cleaned else ["- None found."]
 
+def filter_items_containing(items, keywords):
+    return [
+        item
+        for item in items
+        if any(keyword.lower() in item.lower() for keyword in keywords)
+    ]
+
 def build_digest(markdown: str) -> str:
     today = datetime.now().strftime("%A, %B %-d, %Y")
 
