@@ -1,6 +1,6 @@
 # skills/asana/actions/read_tasks.py
 
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 from skills.asana.tools.asana_client import AsanaClient
 
@@ -25,7 +25,12 @@ def read_project_tasks(project_gid: str, limit: int = 50) -> Dict[str, Any]:
             "due_at,"
             "memberships.section.name,"
             "custom_fields.name,"
-            "custom_fields.display_value"
+            "custom_fields.display_value,"
+            "custom_fields.text_value,"
+            "custom_fields.number_value,"
+            "custom_fields.enum_value.name,"
+            "custom_fields.multi_enum_values.name,"
+            "custom_fields.date_value.date"
         ),
     }
 
