@@ -128,6 +128,22 @@ def format_section(title: str, items: List[str]) -> str:
     cleaned = [shorten_task_line(item) for item in items]
     return f"{title}\n" + "\n".join(cleaned)
 
+
+def filter_items_containing(
+    items: List[str],
+    keywords: List[str],
+    max_items: int = 5,
+) -> List[str]:
+    matched = []
+
+    for item in items:
+        item_text = item.lower()
+        if any(keyword.lower() in item_text for keyword in keywords):
+            matched.append(item)
+
+    return matched[:max_items] if matched else ["- None found."]
+
+
 def extract_field_from_item(item: str, label: str, default: str = "") -> str:
     """
     Extract a labeled field from a generated priority item.
