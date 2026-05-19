@@ -1,7 +1,7 @@
 # Non-secret Asana operational configuration.
 # Secrets (tokens/credentials) remain environment-driven.
 
-project_gid: ""
+project_gid: "1213424083073059"
 
 workflow:
   default_task_limit: 100

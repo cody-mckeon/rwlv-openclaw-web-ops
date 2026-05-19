@@ -27,9 +27,20 @@ def analyze_operational_health(
     if debug:
         for signal in findings:
             _debug_finding(signal)
+<<<<<<< Updated upstream
             print(
                 f"[debug][signal] rule={signal.rule_name} type={signal.signal_type} "
                 f"severity={signal.severity}"
             )
+=======
+
+    return findings
+def analyze_operational_health(tasks, debug=False):
+    findings = []
+    if debug:
+        print(findings)
+
+    findings.extend(detect_p4_in_progress(tasks))
+>>>>>>> Stashed changes
 
     return findings
