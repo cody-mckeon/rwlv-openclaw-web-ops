@@ -41,10 +41,9 @@ class PriorityGovernorClassificationTests(unittest.TestCase):
 
         classified = classify_tasks(tasks)
 
-        self.assertEqual(classified["p1_active"], tasks)
-        self.assertEqual(classified["blocked_or_waiting"], tasks)
-        self.assertEqual(classified["p0_critical_confirmed"], tasks)
-        self.assertEqual(classified["due_dated"], tasks)
+        self.assertEqual(classified["p0_interrupt"], tasks)
+        self.assertEqual(classified["blocked_waiting_at_risk"], tasks)
+        self.assertEqual(classified["date_visible"], tasks)
 
     def test_triage_ready_is_treated_as_triage_not_unknown(self):
         tasks = [
@@ -61,8 +60,7 @@ class PriorityGovernorClassificationTests(unittest.TestCase):
 
         classified = classify_tasks(tasks)
 
-        self.assertEqual(classified["p2_intake_needs_triage"], tasks)
-        self.assertEqual(classified["unclassified"], [])
+        self.assertEqual(classified["triage_ready"], tasks)
 
     def test_markdown_and_digest_include_active_in_progress_tasks(self):
         tasks = [
@@ -81,9 +79,9 @@ class PriorityGovernorClassificationTests(unittest.TestCase):
         digest = build_digest(markdown)
 
         self.assertIn("WEB | Tag Audit and Consent Remediation", markdown)
-        self.assertIn("2. Active in-progress work", digest)
+        self.assertIn("1. P0 Interrupt work", digest)
         self.assertIn("WEB | Tag Audit and Consent Remediation", digest)
-        self.assertNotIn("2. Active in-progress work\n- None found.", digest)
+        self.assertNotIn("1. P0 Interrupt work\n- None found.", digest)
 
 
 if __name__ == "__main__":

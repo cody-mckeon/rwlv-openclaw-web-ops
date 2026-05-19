@@ -49,6 +49,7 @@ def _get_execution_status(task: Dict[str, Any]) -> str:
         or _get_custom_field_value(task, "Execution Status")
         or _get_custom_field_value(task, "Health")
         or _get_custom_field_value(task, "Health / Execution Status")
+        or _get_custom_field_value(task, "Health / Execution")
         or "No Health Status"
     )
 
@@ -77,9 +78,13 @@ def _get_property(task: Dict[str, Any]) -> str:
     return _get_custom_field_value(task, "Property") or "No Property"
 
 
+def _normalize_section_label(section_name: str) -> str:
+    return section_name.strip().lower().replace(" / ", "/")
+
+
 def _has_section(task: Dict[str, Any], section_name: str) -> bool:
-    target = section_name.strip().lower()
-    return any(section.strip().lower() == target for section in _get_section_names(task))
+    target = _normalize_section_label(section_name)
+    return any(_normalize_section_label(section) == target for section in _get_section_names(task))
 
 
 def _is_execution_status(task: Dict[str, Any], *statuses: str) -> bool:
@@ -114,9 +119,6 @@ def _normalize_priority(task: Dict[str, Any]) -> str:
     return "NO_PRIORITY"
 
 
-def _has_section(task: Dict[str, Any], section_name: str) -> bool:
-    target = section_name.strip().lower()
-    return any(section.strip().lower() == target for section in _get_section_names(task))
 
 
 def _is_status(task: Dict[str, Any], *statuses: str) -> bool:
@@ -190,7 +192,7 @@ def _task_line(task: Dict[str, Any]) -> str:
         f"Priority: {priority} | Work Type: {work_type} | "
         f"Release Month: {release_month} | Vendor: {vendor} | "
         f"Ready for Vendor: {ready_for_vendor} | Property: {property_value} | "
-        f"Subtasks: {subtask_count} | GID: {gid}"fxy
+        f"Subtasks: {subtask_count} | GID: {gid}"
     )
 
 def _sort_tasks(tasks: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
