@@ -233,50 +233,10 @@ def detect_p4_in_progress(task: Dict[str, Any]) -> List[OperationalSignal]:
     ]
 
 
-def detect_p0_without_due_date(task: Dict[str, Any]) -> List[OperationalSignal]:
-    facts = classify_operational_task(task)
-
-    if facts["normalized_priority"] != "p0":
-        return []
-    if facts["due"]:
-        return []
-
-    return [
-        _signal(
-            task,
-            signal_type="workflow_contradiction",
-            severity="high",
-            rule_name="detect_p0_without_due_date",
-            message="P0 task is missing a due date.",
-        )
-    ]
-
-
-def detect_scheduled_but_blocked(task: Dict[str, Any]) -> List[OperationalSignal]:
-    facts = classify_operational_task(task)
-
-    if facts["normalized_section"] != "scheduled":
-        return []
-    if not has_blocked_health(task):
-        return []
-
-    return [
-        _signal(
-            task,
-            signal_type="workflow_contradiction",
-            severity="medium",
-            rule_name="detect_scheduled_but_blocked",
-            message="Scheduled task has blocked, waiting, or at-risk health.",
-        )
-    ]
-
-
 def detect_workflow_contradictions(tasks: Iterable[Dict[str, Any]]) -> List[OperationalSignal]:
     signals: List[OperationalSignal] = []
 
     for task in tasks:
         signals.extend(detect_p4_in_progress(task))
-        signals.extend(detect_p0_without_due_date(task))
-        signals.extend(detect_scheduled_but_blocked(task))
 
     return signals
