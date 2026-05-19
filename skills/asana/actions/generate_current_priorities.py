@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from skills.asana.actions.read_tasks import read_project_tasks
+from shared.intelligence.analyze_operational_health import analyze_operational_health
 
 
 DEFAULT_OUTPUT_PATH = "CURRENT_PRIORITIES.generated.md"
@@ -504,6 +505,10 @@ def generate_current_priorities(
     result = read_project_tasks(project_gid=project_gid, limit=limit)
     tasks = result.get("data", [])
 
+    # Operational intelligence runs after task normalization/classification inputs
+    # are prepared and before digest rendering so it stays additive to output layers.
+    operational_signals = analyze_operational_health(tasks, debug=True)
+
     markdown = render_current_priorities_markdown(
         project_gid=project_gid,
         tasks=tasks,
@@ -519,6 +524,7 @@ def generate_current_priorities(
         "project_gid": project_gid,
         "output_path": str(output),
         "task_count": len(tasks),
+        "operational_signal_count": len(operational_signals),
         "errors": [],
     }
 
