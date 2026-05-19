@@ -12,6 +12,7 @@ def _debug_finding(signal: OperationalSignal) -> None:
     print(signal.message)
 
 
+<<<<<<< HEAD
 def analyze_operational_health(
     tasks: List[Dict[str, Any]], *, debug: bool = False
 ) -> List[OperationalSignal]:
@@ -23,24 +24,19 @@ def analyze_operational_health(
     """
     findings: List[OperationalSignal] = []
     findings.extend(detect_p4_in_progress(tasks, debug=debug))
+=======
+def analyze_operational_health(tasks, debug=False):
+    findings = []
+
+    findings.extend(detect_p4_in_progress(tasks))
+>>>>>>> 247b2ef (Validate operational intelligence signal pipeline)
 
     if debug:
         for signal in findings:
-            _debug_finding(signal)
-<<<<<<< Updated upstream
             print(
-                f"[debug][signal] rule={signal.rule_name} type={signal.signal_type} "
+                f"[debug][signal] rule={signal.rule_name} "
+                f"type={signal.signal_type} "
                 f"severity={signal.severity}"
             )
-=======
-
-    return findings
-def analyze_operational_health(tasks, debug=False):
-    findings = []
-    if debug:
-        print(findings)
-
-    findings.extend(detect_p4_in_progress(tasks))
->>>>>>> Stashed changes
 
     return findings

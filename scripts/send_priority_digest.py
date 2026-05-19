@@ -272,7 +272,7 @@ def filter_items_containing(items, keywords, max_items=None):
 
     return filtered
 
-def build_digest(markdown: str, top_items_per_section: int) -> str:
+def build_digest(markdown: str, top_items_per_section=10) -> str:
     today = datetime.now().strftime("%A, %B %-d, %Y")
 
     active = extract_section(markdown, "P1 / Active In Progress", max_items=20)
