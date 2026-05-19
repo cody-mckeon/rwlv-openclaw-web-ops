@@ -1,0 +1,13 @@
+# RWLV operational runtime configuration.
+# This repository is the RWLV client implementation boundary,
+# so non-secret runtime settings live here instead of an extra clients/rwlv tree.
+
+timezone: UTC
+
+priority_digest:
+  top_items_per_section: 5
+  heartbeat_file: HEARTBEAT.priority_digest.md
+
+operational_intelligence:
+  enabled: true
+  debug: true

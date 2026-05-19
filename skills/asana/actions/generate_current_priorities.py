@@ -2,13 +2,13 @@
 
 from __future__ import annotations
 
-import os
 from collections import defaultdict
 from datetime import date
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from skills.asana.actions.read_tasks import read_project_tasks
+from shared.config.runtime import get_asana_project_gid, load_runtime_config
 from shared.intelligence.analyze_operational_health import analyze_operational_health
 
 
@@ -495,19 +495,23 @@ def generate_current_priorities(
     It writes only to a local generated markdown file.
     """
 
-    project_gid = project_gid or os.getenv("ASANA_TEST_PROJECT_GID")
-
-    if not project_gid:
-        raise ValueError(
-            "Missing project_gid. Pass project_gid or set ASANA_TEST_PROJECT_GID."
-        )
+    config = load_runtime_config()
+    project_gid = project_gid or get_asana_project_gid(config)
 
     result = read_project_tasks(project_gid=project_gid, limit=limit)
     tasks = result.get("data", [])
 
     # Operational intelligence runs after task normalization/classification inputs
     # are prepared and before digest rendering so it stays additive to output layers.
-    operational_signals = analyze_operational_health(tasks, debug=True)
+    intelligence_cfg = config.get("runtime", {}).get("operational_intelligence", {})
+    intelligence_enabled = bool(intelligence_cfg.get("enabled", True))
+    intelligence_debug = bool(intelligence_cfg.get("debug", True))
+
+    operational_signals = (
+        analyze_operational_health(tasks, debug=intelligence_debug)
+        if intelligence_enabled
+        else []
+    )
 
     markdown = render_current_priorities_markdown(
         project_gid=project_gid,

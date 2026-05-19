@@ -11,11 +11,12 @@ from urllib.error import HTTPError
 from urllib.parse import urlencode
 from urllib.request import Request, urlopen
 from skills.asana.actions.read_subtasks import read_task_subtasks
+from shared.config.runtime import load_runtime_config
 
 
 WORKSPACE_ROOT = Path(__file__).resolve().parents[1]
 PRIORITIES_FILE = WORKSPACE_ROOT / "CURRENT_PRIORITIES.generated.md"
-HEARTBEAT_FILE = WORKSPACE_ROOT / "HEARTBEAT.priority_digest.md"
+DEFAULT_HEARTBEAT_FILE = WORKSPACE_ROOT / "HEARTBEAT.priority_digest.md"
 
 
 def load_env(env_path: Path) -> None:
@@ -40,7 +41,7 @@ def load_env(env_path: Path) -> None:
             os.environ[key] = value
 
 
-def extract_section(markdown: str, heading: str, max_items: int = 5) -> List[str]:
+def extract_section(markdown: str, heading: str, max_items: int) -> List[str]:
     """
     Extract bullet lines from a markdown section by heading.
     Example heading: "P1 / Active In Progress"
@@ -271,7 +272,7 @@ def filter_items_containing(items, keywords, max_items=None):
 
     return filtered
 
-def build_digest(markdown: str) -> str:
+def build_digest(markdown: str, top_items_per_section: int) -> str:
     today = datetime.now().strftime("%A, %B %-d, %Y")
 
     active = extract_section(markdown, "P1 / Active In Progress", max_items=20)
@@ -439,11 +440,17 @@ def main() -> None:
         )
 
     markdown = PRIORITIES_FILE.read_text(encoding="utf-8")
-    digest = build_digest(markdown)
+    runtime_config = load_runtime_config()
+    digest_cfg = runtime_config.get("runtime", {}).get("priority_digest", {})
+    top_items_per_section = int(digest_cfg.get("top_items_per_section", 5))
+    heartbeat_relative = digest_cfg.get("heartbeat_file", "HEARTBEAT.priority_digest.md")
+    heartbeat_file = WORKSPACE_ROOT / str(heartbeat_relative)
+
+    digest = build_digest(markdown, top_items_per_section=top_items_per_section)
 
     send_telegram_message(digest)
 
-    HEARTBEAT_FILE.write_text(
+    heartbeat_file.write_text(
         f"Last priority digest sent: {datetime.now().isoformat()}\n",
         encoding="utf-8",
     )
