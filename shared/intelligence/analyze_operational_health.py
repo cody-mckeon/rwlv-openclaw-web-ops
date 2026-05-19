@@ -1,4 +1,4 @@
-from shared.intelligence.contradictions import detect_p4_in_progress
+from __future__ import annotations
 
 from typing import Any, Dict, List
 
@@ -12,24 +12,18 @@ def _debug_finding(signal: OperationalSignal) -> None:
     print(signal.message)
 
 
-def analyze_operational_health(tasks: List[Dict[str, Any]], *, debug: bool = False) -> List[OperationalSignal]:
-    """Run small deterministic operational rules and return emitted signals.
-
-    We intentionally keep this tiny and composable so every rule is testable,
-    explainable, and easy to observe before adding broader AI reasoning.
-    """
+def analyze_operational_health(
+    tasks: List[Dict[str, Any]], *, debug: bool = False
+) -> List[OperationalSignal]:
     findings: List[OperationalSignal] = []
-    for task in tasks:
-        findings.extend(detect_p4_in_progress(task))
+    findings.extend(detect_p4_in_progress(tasks, debug=debug))
 
     if debug:
         for signal in findings:
             _debug_finding(signal)
-
-    return findings
-def analyze_operational_health(tasks):
-    findings = []
-
-    findings.extend(detect_p4_in_progress(tasks))
+            print(
+                f"[debug][signal] rule={signal.rule_name} type={signal.signal_type} "
+                f"severity={signal.severity}"
+            )
 
     return findings
