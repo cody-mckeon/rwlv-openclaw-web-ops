@@ -30,23 +30,19 @@ The skill cannot:
 
 ## Environment Variables
 
-Required:
+Required secrets via environment variables:
 
 ```bash
 export ASANA_ACCESS_TOKEN="your_token_here"
 export ASANA_MODE="read_only"
-export ASANA_TEST_PROJECT_GID="your_project_gid"
 ```
 
-Optional observability controls:
+Required non-secret operational settings via repository config:
 
-```bash
-# Include a Debug Diagnostics section in CURRENT_PRIORITIES.generated.md.
-export PRIORITY_GOVERNOR_DEBUG=1
+- `configs/asana.yaml` → `project_gid`
+- `configs/runtime.yaml` → timezone, digest behavior, operational intelligence toggles
 
-# Emit per-task normalized parsing/classification logs.
-export PRIORITY_GOVERNOR_LOG_LEVEL=DEBUG
-```
+This repo (`rwlv-openclaw-web-ops`) is already the RWLV client boundary, so RWLV operational settings live directly in this repository config instead of a nested `clients/rwlv/` path.
 
 ## Generate Current Priorities Snapshot
 
