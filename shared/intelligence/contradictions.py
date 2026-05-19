@@ -1,4 +1,5 @@
 from shared.intelligence.models import OperationalSignal
+from typing import Dict, Any, Sequence, Optional, List, Tuple, Iterable
 
 
 BLOCKED_HEALTH_KEYWORDS = (
@@ -9,7 +10,7 @@ BLOCKED_HEALTH_KEYWORDS = (
 )
 
 
-def _custom_field_value(task: Dict[str, Any], field_names: Sequence[str]) -> str | None:
+def _custom_field_value(task: Dict[str, Any], field_names: Sequence[str]) -> Optional[str]:
     targets = {name.strip().lower() for name in field_names}
 
     for field in task.get("custom_fields", []) or []:
@@ -37,12 +38,12 @@ def task_name(task: Dict[str, Any]) -> str:
     return task.get("name") or "Untitled task"
 
 
-def task_gid(task: Dict[str, Any]) -> str | None:
+def task_gid(task: Dict[str, Any]) -> Optional[str]:
     gid = task.get("gid")
     return str(gid) if gid else None
 
 
-def due_value(task: Dict[str, Any]) -> str | None:
+def due_value(task: Dict[str, Any]) -> Optional[str]:
     due = task.get("due_on") or task.get("due_at")
     return str(due) if due else None
 
@@ -81,7 +82,7 @@ def section_names(task: Dict[str, Any]) -> List[str]:
     return sections or ["No Section"]
 
 
-def normalize_priority(value: str | None) -> str:
+def normalize_priority(value: Optional[str]) -> str:
     value = (value or "").strip().lower()
 
     if value.startswith("p0") or value == "critical":
@@ -98,7 +99,7 @@ def normalize_priority(value: str | None) -> str:
     return "no_priority"
 
 
-def normalize_section(value: str | None) -> str:
+def normalize_section(value: Optional[str]) -> str:
     value = (value or "").strip().lower()
     compact = value.replace(" ", "")
 
