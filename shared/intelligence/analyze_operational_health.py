@@ -15,6 +15,12 @@ def _debug_finding(signal: OperationalSignal) -> None:
 def analyze_operational_health(
     tasks: List[Dict[str, Any]], *, debug: bool = False
 ) -> List[OperationalSignal]:
+    """
+    Run deterministic multidimensional operational rules.
+
+    Normalization happens before rule evaluation so rules reason on canonical
+    (section, priority, health) dimensions instead of raw UI labels.
+    """
     findings: List[OperationalSignal] = []
     findings.extend(detect_p4_in_progress(tasks, debug=debug))
 
