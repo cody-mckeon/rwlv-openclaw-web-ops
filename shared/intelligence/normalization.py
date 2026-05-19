@@ -42,10 +42,46 @@ def extract_priority_raw(task: Dict[str, Any]) -> str:
 
 
 def normalize_section_value(raw_section: str | None) -> str:
+    """Convert raw section labels into canonical workflow lifecycle values."""
     value = _collapse(raw_section or "")
-    if value == "in progress":
-        return "in_progress"
-    return value.replace(" ", "_") if value else "unknown"
+    if not value:
+        return "unknown"
+
+    section_map = {
+        "ideas": "ideas_parking_lot",
+        "parking lot": "ideas_parking_lot",
+        "ideas parking lot": "ideas_parking_lot",
+        "intake": "intake",
+        "triage ready": "triage_ready",
+        "in progress": "in_progress",
+        "qa": "qa",
+        "scheduled ready to launch": "scheduled_ready_to_launch",
+        "done": "done",
+        "canceled": "canceled",
+        "cancelled": "canceled",
+    }
+    return section_map.get(value, value.replace(" ", "_"))
+
+
+def normalize_health_value(raw_health: str | None) -> str:
+    """Convert raw execution/health labels into canonical execution condition values."""
+    value = _collapse(raw_health or "")
+    if not value:
+        return "unknown"
+
+    if "on track" in value:
+        return "on_track"
+    if "waiting on vendor" in value:
+        return "waiting_on_vendor"
+    if "waiting on stakeholder" in value:
+        return "waiting_on_stakeholder"
+    if "at risk" in value or "at_risk" in value:
+        return "at_risk"
+    if "blocked" in value:
+        return "blocked"
+    if "waiting" in value:
+        return "waiting"
+    return value.replace(" ", "_")
 
 
 def get_task_section_raw(task: Dict[str, Any]) -> str:
@@ -57,11 +93,26 @@ def get_task_section_raw(task: Dict[str, Any]) -> str:
     return ""
 
 
+def extract_health_raw(task: Dict[str, Any]) -> str:
+    for field in task.get("custom_fields", []):
+        if (field.get("name") or "").strip().lower() not in {"health", "execution", "status"}:
+            continue
+        return (
+            field.get("display_value")
+            or (field.get("enum_value") or {}).get("name")
+            or field.get("text_value")
+            or ""
+        )
+    return ""
+
+
 def canonicalize_task(task: Dict[str, Any]) -> Dict[str, Any]:
     raw_priority = extract_priority_raw(task)
     raw_section = get_task_section_raw(task)
+    raw_health = extract_health_raw(task)
     normalized_priority = normalize_priority_value(raw_priority)
     normalized_section = normalize_section_value(raw_section)
+    normalized_health = normalize_health_value(raw_health)
 
     return {
         **task,
@@ -69,4 +120,6 @@ def canonicalize_task(task: Dict[str, Any]) -> Dict[str, Any]:
         "normalized_priority": normalized_priority,
         "raw_section": raw_section,
         "normalized_section": normalized_section,
+        "raw_health": raw_health,
+        "normalized_health": normalized_health,
     }

@@ -6,6 +6,13 @@ Priority Governor system.
 ## Current assumptions
 
 - Asana task dictionaries are the input shape.
+- Operational meaning is split across dimensions:
+  - `Section` = workflow lifecycle state (`where is the work operationally?`)
+  - `Priority` = strategic importance / commitment (`how committed is this work?`)
+  - `Health` = execution condition / risk (`what condition is execution in?`)
+- Section and priority are intentionally independent. Example:
+  `section=in_progress` with `priority=p4` is valid input and surfaced as an
+  operational contradiction (low-commitment work consuming active capacity).
 - `Priority` is normalized into `p0` through `p4`, with legacy values mapped as:
   `Critical -> p0`, `High -> p1`, `Medium -> p2`, and `Low -> p3`.
 - `Scheduled / Ready to Launch` is normalized to `scheduled`.
