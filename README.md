@@ -869,3 +869,48 @@ The system currently supports:
 * config-driven runtime behavior
 
 The platform is still evolving, but the architecture is now moving toward a maintainable operational intelligence system rather than isolated automation scripts.
+
+---
+
+# Phase 1 Containerization (Lightweight Runtime)
+
+This repository now supports a lightweight Dockerized runtime focused on deterministic local execution.
+
+The container setup intentionally preserves the current architecture and workflow. It does **not** add orchestration, infrastructure stacks, or deployment tooling.
+
+## Build Runtime Image
+
+```bash
+docker compose build
+```
+
+## Open Interactive Runtime Shell
+
+```bash
+docker compose run rwlv-runtime bash
+```
+
+## Run Unit Tests in Container
+
+```bash
+docker compose run rwlv-runtime python3 -m unittest discover -s skills/asana/tests -p 'test_*.py'
+```
+
+## Generate Operational Snapshot in Container
+
+```bash
+docker compose run rwlv-runtime python3 -m skills.asana.actions.generate_current_priorities
+```
+
+## Send Priority Digest in Container
+
+```bash
+docker compose run rwlv-runtime python3 -m scripts.send_priority_digest
+```
+
+## Notes
+
+- The repository is mounted into `/app` so local edits are reflected immediately.
+- `.env` is loaded automatically via `docker-compose.yml`.
+- The container is interactive (`stdin_open` + `tty`) for manual operational execution.
+- This phase is runtime containerization only; no repository restructuring is introduced.
