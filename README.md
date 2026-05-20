@@ -707,6 +707,14 @@ Stored in:
 .env
 ```
 
+Bootstrap from the repository-safe template:
+
+```bash
+cp .env.example .env
+```
+
+Then populate only real secrets in `.env`.
+
 Examples:
 
 * Asana access tokens
@@ -755,6 +763,19 @@ It should consume generated operational state.
 git checkout main
 git pull
 ```
+
+---
+
+## Runtime Setup
+
+```bash
+cp .env.example .env
+```
+
+Then:
+
+* populate `.env` secrets
+* configure `configs/asana.yaml` with project IDs and workflow settings
 
 ---
 

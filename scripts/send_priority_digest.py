@@ -11,7 +11,12 @@ from urllib.error import HTTPError
 from urllib.parse import urlencode
 from urllib.request import Request, urlopen
 from skills.asana.actions.read_subtasks import read_task_subtasks
-from shared.config.runtime import load_runtime_config
+from shared.config.runtime import (
+    get_required_env,
+    load_dotenv,
+    load_runtime_config,
+    validate_runtime_environment,
+)
 
 
 WORKSPACE_ROOT = Path(__file__).resolve().parents[1]
@@ -19,26 +24,6 @@ PRIORITIES_FILE = WORKSPACE_ROOT / "CURRENT_PRIORITIES.generated.md"
 DEFAULT_HEARTBEAT_FILE = WORKSPACE_ROOT / "HEARTBEAT.priority_digest.md"
 
 
-def load_env(env_path: Path) -> None:
-    """
-    Minimal .env loader.
-    Supports simple KEY="value" or KEY=value lines.
-    """
-    if not env_path.exists():
-        return
-
-    for line in env_path.read_text(encoding="utf-8").splitlines():
-        line = line.strip()
-
-        if not line or line.startswith("#") or "=" not in line:
-            continue
-
-        key, value = line.split("=", 1)
-        key = key.strip()
-        value = value.strip().strip('"').strip("'")
-
-        if key and key not in os.environ:
-            os.environ[key] = value
 
 
 def extract_section(markdown: str, heading: str, max_items: int) -> List[str]:
@@ -376,14 +361,8 @@ def split_message(message: str, max_length: int = 3900) -> List[str]:
     return chunks
 
 def send_telegram_message(message: str) -> None:
-    token = (os.getenv("TELEGRAM_BOT_TOKEN") or "").strip()
-    chat_id = (os.getenv("TELEGRAM_CHAT_ID") or "").strip()
-
-    if not token:
-        raise ValueError("Missing TELEGRAM_BOT_TOKEN")
-
-    if not chat_id:
-        raise ValueError("Missing TELEGRAM_CHAT_ID")
+    token = get_required_env("TELEGRAM_BOT_TOKEN")
+    chat_id = get_required_env("TELEGRAM_CHAT_ID")
 
     try:
         token.encode("ascii")
@@ -432,7 +411,8 @@ def send_telegram_message(message: str) -> None:
 
 
 def main() -> None:
-    load_env(WORKSPACE_ROOT / ".env")
+    load_dotenv(WORKSPACE_ROOT / ".env")
+    validate_runtime_environment(["TELEGRAM_BOT_TOKEN", "TELEGRAM_CHAT_ID"])
 
     if not PRIORITIES_FILE.exists():
         raise FileNotFoundError(

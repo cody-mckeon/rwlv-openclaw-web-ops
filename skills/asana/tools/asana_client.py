@@ -1,8 +1,11 @@
-import os
+from __future__ import annotations
 
+import os
 from typing import Any, Dict, Optional
 
 import requests
+
+from shared.config.runtime import get_required_env, load_dotenv
 
 BASE_URL = "https://app.asana.com/api/1.0"
 
@@ -18,11 +21,9 @@ class AsanaClient:
     """
 
     def __init__(self) -> None:
-        self.token = os.getenv("ASANA_ACCESS_TOKEN")
+        load_dotenv()
+        self.token = get_required_env("ASANA_ACCESS_TOKEN")
         self.mode = os.getenv("ASANA_MODE", "read_only")
-
-        if not self.token:
-            raise ValueError("Missing ASANA_ACCESS_TOKEN")
 
     def _headers(self) -> Dict[str, str]:
         return {
@@ -68,7 +69,7 @@ class AsanaClient:
     def delete(self, path: str) -> Dict[str, Any]:
         self._block_write("DELETE")
         raise NotImplementedError("DELETE is not implemented for the read-only MVP.")
-        
-    def ensure_write_allowed():
-        if os.getenv("ASANA_MODE") == "read_only":
+
+    def ensure_write_allowed(self) -> None:
+        if (os.getenv("ASANA_MODE") or "read_only").strip() == "read_only":
             raise Exception("Write operations disabled")
