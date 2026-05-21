@@ -976,3 +976,62 @@ docker compose run rwlv-runtime python3 -m scripts.send_priority_digest
 - `.env` is loaded automatically via `docker-compose.yml`.
 - The container is interactive (`stdin_open` + `tty`) for manual operational execution.
 - This phase is runtime containerization only; no repository restructuring is introduced.
+
+## Operational Runtime Management (Phase B)
+
+Phase B adds lightweight runtime management without introducing orchestration platforms.
+
+### Runtime validation
+
+Before execution, runtime actions now validate:
+
+- required configuration structure
+- required environment variables
+- generated and logging path writeability
+- Asana and Telegram configuration presence
+
+Validation failures are raised clearly for operators and logged as structured failures.
+
+### Runtime status script
+
+Use a deterministic runtime status check:
+
+```bash
+python3 -m scripts.runtime_status
+```
+
+Docker usage:
+
+```bash
+docker compose run rwlv-runtime python3 -m scripts.runtime_status
+```
+
+Expected output style:
+
+```text
+## Runtime Status
+
+Docker Runtime: OK
+Asana Config: OK
+Telegram Config: OK
+Generated Paths: OK
+Structured Logging: OK
+```
+
+### Failure observability
+
+Structured JSONL logging (`generated/logs/runtime.jsonl`) now includes explicit events for:
+
+- startup validation failures
+- runtime failures and exception states
+- degraded/invalid operational states
+- outbound delivery failures
+
+### Operational lifecycle philosophy
+
+Operational runtime management remains intentionally lightweight and client-safe:
+
+- deterministic execution over autonomous behavior
+- inspectable file-based artifacts over hidden systems
+- explicit operational checks over implicit assumptions
+- no Kubernetes, dashboards, distributed queues, or databases in this phase

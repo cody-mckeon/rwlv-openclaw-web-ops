@@ -18,6 +18,7 @@ from shared.config.runtime import (
     validate_runtime_environment,
 )
 from shared.logging.runtime_logger import log_event
+from shared.runtime_health import RuntimeValidationError, validate_runtime_startup
 
 
 WORKSPACE_ROOT = Path(__file__).resolve().parents[1]
@@ -413,14 +414,6 @@ def send_telegram_message(message: str) -> None:
 
 def main() -> None:
     load_dotenv(WORKSPACE_ROOT / ".env")
-    validate_runtime_environment(["TELEGRAM_BOT_TOKEN", "TELEGRAM_CHAT_ID"])
-
-    if not PRIORITIES_FILE.exists():
-        raise FileNotFoundError(
-            f"Missing {PRIORITIES_FILE}. Run the Asana priority generator first."
-        )
-
-    markdown = PRIORITIES_FILE.read_text(encoding="utf-8")
     runtime_config = load_runtime_config()
     digest_cfg = runtime_config.get("runtime", {}).get("priority_digest", {})
     top_items_per_section = int(digest_cfg.get("top_items_per_section", 5))
@@ -431,6 +424,34 @@ def main() -> None:
     logs_dir = WORKSPACE_ROOT / str(paths_cfg.get("logs_dir", "generated/logs"))
     runtime_log_file = logs_dir / str(runtime_cfg.get("logging", {}).get("runtime_log_file", "runtime.jsonl"))
 
+    try:
+        validate_runtime_startup(runtime_config, ["TELEGRAM_BOT_TOKEN", "TELEGRAM_CHAT_ID"])
+        validate_runtime_environment(["TELEGRAM_BOT_TOKEN", "TELEGRAM_CHAT_ID"])
+    except RuntimeValidationError as exc:
+        log_event(
+            runtime_log_file,
+            event_type="startup_validation",
+            severity="error",
+            status="failure",
+            action="scripts.send_priority_digest",
+            error=str(exc),
+        )
+        raise
+
+    if not PRIORITIES_FILE.exists():
+        message = f"Missing {PRIORITIES_FILE}. Run the Asana priority generator first."
+        log_event(
+            runtime_log_file,
+            event_type="validation_failure",
+            severity="error",
+            status="failure",
+            action="scripts.send_priority_digest",
+            error=message,
+        )
+        raise FileNotFoundError(message)
+
+    markdown = PRIORITIES_FILE.read_text(encoding="utf-8")
+
     log_event(
         runtime_log_file,
         event_type="runtime_start",
@@ -438,7 +459,19 @@ def main() -> None:
         action="scripts.send_priority_digest",
     )
 
-    digest = build_digest(markdown, top_items_per_section=top_items_per_section)
+    try:
+        digest = build_digest(markdown, top_items_per_section=top_items_per_section)
+    except Exception as exc:
+        log_event(
+            runtime_log_file,
+            event_type="runtime_failure",
+            severity="error",
+            status="failure",
+            action="scripts.send_priority_digest",
+            stage="build_digest",
+            error=str(exc),
+        )
+        raise
     log_event(
         runtime_log_file,
         event_type="digest_generation",

@@ -8,9 +8,10 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from skills.asana.actions.read_tasks import read_project_tasks
-from shared.config.runtime import get_asana_project_gid, load_runtime_config
+from shared.config.runtime import get_asana_project_gid, load_dotenv, load_runtime_config
 from shared.intelligence.analyze_operational_health import analyze_operational_health
 from shared.logging.runtime_logger import log_event
+from shared.runtime_health import RuntimeValidationError, validate_runtime_startup
 
 
 DEFAULT_OUTPUT_PATH = "generated/snapshots/CURRENT_PRIORITIES.generated.md"
@@ -496,6 +497,7 @@ def generate_current_priorities(
     It writes only to a local generated markdown file.
     """
 
+    load_dotenv()
     config = load_runtime_config()
     runtime_cfg = config.get("runtime", {})
     paths_cfg = runtime_cfg.get("paths", {})
@@ -503,6 +505,19 @@ def generate_current_priorities(
     runtime_log_file = logs_dir / str(runtime_cfg.get("logging", {}).get("runtime_log_file", "runtime.jsonl"))
 
     project_gid = project_gid or get_asana_project_gid(config)
+
+    try:
+        validate_runtime_startup(config, ["ASANA_ACCESS_TOKEN"])
+    except RuntimeValidationError as exc:
+        log_event(
+            runtime_log_file,
+            event_type="startup_validation",
+            severity="error",
+            status="failure",
+            action="asana.generate_current_priorities",
+            error=str(exc),
+        )
+        raise
 
     log_event(
         runtime_log_file,
@@ -570,8 +585,20 @@ def generate_current_priorities(
     )
 
     output = Path(output_path)
-    output.parent.mkdir(parents=True, exist_ok=True)
-    output.write_text(markdown, encoding="utf-8")
+    try:
+        output.parent.mkdir(parents=True, exist_ok=True)
+        output.write_text(markdown, encoding="utf-8")
+    except Exception as exc:
+        log_event(
+            runtime_log_file,
+            event_type="runtime_failure",
+            severity="error",
+            status="failure",
+            action="asana.generate_current_priorities",
+            stage="write_output",
+            error=str(exc),
+        )
+        raise
 
     log_event(
         runtime_log_file,
