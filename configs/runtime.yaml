@@ -18,4 +18,4 @@ paths:
   logs_dir: generated/logs
 
 logging:
-  runtime_log_file: runtime-events.jsonl
+  runtime_log_file: runtime.jsonl

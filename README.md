@@ -30,6 +30,30 @@ It is intentionally separated from any future reusable core platform infrastruct
 
 ---
 
+## Runtime Observability (Phase A)
+
+This runtime now writes lightweight structured operational events to:
+
+```text
+generated/logs/runtime.jsonl
+```
+
+### Philosophy
+
+- Runtime logs are **machine-readable operational observability**.
+- Telegram digest output is **human-facing operational summary**.
+- These are intentionally separate concerns.
+
+### Logging approach
+
+- JSON Lines (`.jsonl`) append-only file
+- One valid JSON object per line
+- UTC timestamped events
+- Sparse, meaningful operational events (not verbose noise)
+- Python standard library only (no external logging frameworks)
+
+Typical events include runtime start, Asana fetch results, operational intelligence analysis, contradiction detections, digest generation, and Telegram send results.
+
 # Architectural Philosophy
 
 ## Core Principle

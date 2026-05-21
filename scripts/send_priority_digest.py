@@ -17,7 +17,7 @@ from shared.config.runtime import (
     load_runtime_config,
     validate_runtime_environment,
 )
-from shared.runtime_logging import log_event
+from shared.logging.runtime_logger import log_event
 
 
 WORKSPACE_ROOT = Path(__file__).resolve().parents[1]
@@ -429,13 +429,41 @@ def main() -> None:
     runtime_cfg = runtime_config.get("runtime", {})
     paths_cfg = runtime_cfg.get("paths", {})
     logs_dir = WORKSPACE_ROOT / str(paths_cfg.get("logs_dir", "generated/logs"))
-    runtime_log_file = logs_dir / str(runtime_cfg.get("logging", {}).get("runtime_log_file", "runtime-events.jsonl"))
+    runtime_log_file = logs_dir / str(runtime_cfg.get("logging", {}).get("runtime_log_file", "runtime.jsonl"))
+
+    log_event(
+        runtime_log_file,
+        event_type="runtime_start",
+        severity="info",
+        action="scripts.send_priority_digest",
+    )
 
     digest = build_digest(markdown, top_items_per_section=top_items_per_section)
+    log_event(
+        runtime_log_file,
+        event_type="digest_generation",
+        severity="info",
+        channel="telegram",
+        digest_chars=len(digest),
+    )
 
-    log_event(runtime_log_file, "runtime.execution", action="scripts.send_priority_digest", digest_chars=len(digest))
-    send_telegram_message(digest)
-    log_event(runtime_log_file, "digest.send", channel="telegram", status="ok")
+    try:
+        send_telegram_message(digest)
+        log_event(
+            runtime_log_file,
+            event_type="telegram_send",
+            severity="info",
+            status="success",
+        )
+    except Exception as exc:
+        log_event(
+            runtime_log_file,
+            event_type="telegram_send",
+            severity="error",
+            status="failure",
+            error=str(exc),
+        )
+        raise
 
     heartbeat_file.write_text(
         f"Last priority digest sent: {datetime.now().isoformat()}\n",

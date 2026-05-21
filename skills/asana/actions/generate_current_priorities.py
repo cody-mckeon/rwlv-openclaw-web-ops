@@ -10,7 +10,7 @@ from typing import Any, Dict, List, Optional
 from skills.asana.actions.read_tasks import read_project_tasks
 from shared.config.runtime import get_asana_project_gid, load_runtime_config
 from shared.intelligence.analyze_operational_health import analyze_operational_health
-from shared.runtime_logging import log_event
+from shared.logging.runtime_logger import log_event
 
 
 DEFAULT_OUTPUT_PATH = "generated/snapshots/CURRENT_PRIORITIES.generated.md"
@@ -497,14 +497,44 @@ def generate_current_priorities(
     """
 
     config = load_runtime_config()
+    runtime_cfg = config.get("runtime", {})
+    paths_cfg = runtime_cfg.get("paths", {})
+    logs_dir = Path(paths_cfg.get("logs_dir", "generated/logs"))
+    runtime_log_file = logs_dir / str(runtime_cfg.get("logging", {}).get("runtime_log_file", "runtime.jsonl"))
+
     project_gid = project_gid or get_asana_project_gid(config)
 
-    result = read_project_tasks(project_gid=project_gid, limit=limit)
-    tasks = result.get("data", [])
+    log_event(
+        runtime_log_file,
+        event_type="runtime_start",
+        severity="info",
+        action="asana.generate_current_priorities",
+        project_gid=project_gid,
+    )
 
-    # Operational intelligence runs after task normalization/classification inputs
-    # are prepared and before digest rendering so it stays additive to output layers.
-    intelligence_cfg = config.get("runtime", {}).get("operational_intelligence", {})
+    try:
+        result = read_project_tasks(project_gid=project_gid, limit=limit)
+        tasks = result.get("data", [])
+        log_event(
+            runtime_log_file,
+            event_type="asana_fetch",
+            severity="info",
+            status="success",
+            action="asana.generate_current_priorities",
+            task_count=len(tasks),
+        )
+    except Exception as exc:
+        log_event(
+            runtime_log_file,
+            event_type="asana_fetch",
+            severity="error",
+            status="failure",
+            action="asana.generate_current_priorities",
+            error=str(exc),
+        )
+        raise
+
+    intelligence_cfg = runtime_cfg.get("operational_intelligence", {})
     intelligence_enabled = bool(intelligence_cfg.get("enabled", True))
     intelligence_debug = bool(intelligence_cfg.get("debug", True))
 
@@ -514,23 +544,43 @@ def generate_current_priorities(
         else []
     )
 
+    log_event(
+        runtime_log_file,
+        event_type="operational_intelligence_analysis",
+        severity="info",
+        enabled=intelligence_enabled,
+        finding_count=len(operational_signals),
+    )
+
+    contradiction_count = sum(
+        1 for signal in operational_signals if signal.signal_type == "contradiction"
+    )
+    if contradiction_count:
+        log_event(
+            runtime_log_file,
+            event_type="contradiction_detected",
+            severity="warning",
+            rule="detect_p4_in_progress",
+            count=contradiction_count,
+        )
+
     markdown = render_current_priorities_markdown(
         project_gid=project_gid,
         tasks=tasks,
     )
 
-    runtime_cfg = config.get("runtime", {})
-    paths_cfg = runtime_cfg.get("paths", {})
-    logs_dir = Path(paths_cfg.get("logs_dir", "generated/logs"))
-    runtime_log_file = logs_dir / str(runtime_cfg.get("logging", {}).get("runtime_log_file", "runtime-events.jsonl"))
-
     output = Path(output_path)
     output.parent.mkdir(parents=True, exist_ok=True)
     output.write_text(markdown, encoding="utf-8")
 
-    log_event(runtime_log_file, "runtime.execution", action="asana.generate_current_priorities", project_gid=project_gid, task_count=len(tasks))
-    if operational_signals:
-        log_event(runtime_log_file, "operational.findings", count=len(operational_signals))
+    log_event(
+        runtime_log_file,
+        event_type="runtime_execution",
+        severity="info",
+        action="asana.generate_current_priorities",
+        project_gid=project_gid,
+        task_count=len(tasks),
+    )
 
     return {
         "ok": True,
