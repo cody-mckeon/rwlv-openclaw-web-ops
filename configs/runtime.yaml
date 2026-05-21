@@ -11,3 +11,11 @@ priority_digest:
 operational_intelligence:
   enabled: true
   debug: true
+
+paths:
+  generated_dir: generated
+  snapshots_dir: generated/snapshots
+  logs_dir: generated/logs
+
+logging:
+  runtime_log_file: runtime-events.jsonl

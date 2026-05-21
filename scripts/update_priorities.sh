@@ -2,7 +2,7 @@
 
 set -e
 
-cd /Users/cody.mckeon/.openclaw/workspace
+cd "$(dirname "$0")/.."
 
 if [ -f .env ]; then
   set -a
