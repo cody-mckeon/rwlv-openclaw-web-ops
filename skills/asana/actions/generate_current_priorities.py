@@ -10,9 +10,10 @@ from typing import Any, Dict, List, Optional
 from skills.asana.actions.read_tasks import read_project_tasks
 from shared.config.runtime import get_asana_project_gid, load_runtime_config
 from shared.intelligence.analyze_operational_health import analyze_operational_health
+from shared.runtime_logging import log_event
 
 
-DEFAULT_OUTPUT_PATH = "CURRENT_PRIORITIES.generated.md"
+DEFAULT_OUTPUT_PATH = "generated/snapshots/CURRENT_PRIORITIES.generated.md"
 
 # Add Custom Field Helpers for Priority Fix
 def _get_custom_field_value(task: Dict[str, Any], field_name: str) -> Optional[str]:
@@ -518,8 +519,18 @@ def generate_current_priorities(
         tasks=tasks,
     )
 
+    runtime_cfg = config.get("runtime", {})
+    paths_cfg = runtime_cfg.get("paths", {})
+    logs_dir = Path(paths_cfg.get("logs_dir", "generated/logs"))
+    runtime_log_file = logs_dir / str(runtime_cfg.get("logging", {}).get("runtime_log_file", "runtime-events.jsonl"))
+
     output = Path(output_path)
+    output.parent.mkdir(parents=True, exist_ok=True)
     output.write_text(markdown, encoding="utf-8")
+
+    log_event(runtime_log_file, "runtime.execution", action="asana.generate_current_priorities", project_gid=project_gid, task_count=len(tasks))
+    if operational_signals:
+        log_event(runtime_log_file, "operational.findings", count=len(operational_signals))
 
     return {
         "ok": True,

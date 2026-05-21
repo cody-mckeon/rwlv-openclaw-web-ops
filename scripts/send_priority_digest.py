@@ -17,10 +17,11 @@ from shared.config.runtime import (
     load_runtime_config,
     validate_runtime_environment,
 )
+from shared.runtime_logging import log_event
 
 
 WORKSPACE_ROOT = Path(__file__).resolve().parents[1]
-PRIORITIES_FILE = WORKSPACE_ROOT / "CURRENT_PRIORITIES.generated.md"
+PRIORITIES_FILE = WORKSPACE_ROOT / "generated/snapshots/CURRENT_PRIORITIES.generated.md"
 DEFAULT_HEARTBEAT_FILE = WORKSPACE_ROOT / "HEARTBEAT.priority_digest.md"
 
 
@@ -425,10 +426,16 @@ def main() -> None:
     top_items_per_section = int(digest_cfg.get("top_items_per_section", 5))
     heartbeat_relative = digest_cfg.get("heartbeat_file", "HEARTBEAT.priority_digest.md")
     heartbeat_file = WORKSPACE_ROOT / str(heartbeat_relative)
+    runtime_cfg = runtime_config.get("runtime", {})
+    paths_cfg = runtime_cfg.get("paths", {})
+    logs_dir = WORKSPACE_ROOT / str(paths_cfg.get("logs_dir", "generated/logs"))
+    runtime_log_file = logs_dir / str(runtime_cfg.get("logging", {}).get("runtime_log_file", "runtime-events.jsonl"))
 
     digest = build_digest(markdown, top_items_per_section=top_items_per_section)
 
+    log_event(runtime_log_file, "runtime.execution", action="scripts.send_priority_digest", digest_chars=len(digest))
     send_telegram_message(digest)
+    log_event(runtime_log_file, "digest.send", channel="telegram", status="ok")
 
     heartbeat_file.write_text(
         f"Last priority digest sent: {datetime.now().isoformat()}\n",
