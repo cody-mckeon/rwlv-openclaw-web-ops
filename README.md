@@ -54,6 +54,44 @@ generated/logs/runtime.jsonl
 
 Typical events include runtime start, Asana fetch results, operational intelligence analysis, contradiction detections, digest generation, and Telegram send results.
 
+## Operational Artifact Persistence
+
+The runtime writes operational artifacts into:
+
+```text
+generated/
+```
+
+In Docker, container filesystems are ephemeral by default. If artifacts are only written inside the container layer, they can disappear when that container lifecycle ends.
+
+To preserve operational history, `docker-compose.yml` bind-mounts the local repository path:
+
+```text
+./generated
+```
+
+to the container path:
+
+```text
+/app/generated
+```
+
+This keeps runtime outputs visible on the host and durable across container runs while staying lightweight and explicit.
+
+### Container filesystem
+
+Ephemeral runtime state used during execution.
+
+### generated/
+
+Persistent operational artifacts (for example logs and snapshots) retained on the local host filesystem.
+
+### Persistence philosophy
+
+- Keep infrastructure simple and explainable.
+- Preserve deterministic operational history in plain files.
+- Maintain runtime portability and reproducibility without external storage systems.
+
 # Architectural Philosophy
 
 ## Core Principle

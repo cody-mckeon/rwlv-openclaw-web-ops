@@ -8,9 +8,6 @@ services:
       - .env
     volumes:
       - .:/app
-      - rwlv_generated:/app/generated
+      - ./generated:/app/generated
     stdin_open: true
     tty: true
-
-volumes:
-  rwlv_generated:
