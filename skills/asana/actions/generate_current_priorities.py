@@ -12,9 +12,10 @@ from shared.config.runtime import get_asana_project_gid, load_dotenv, load_runti
 from shared.intelligence.analyze_operational_health import analyze_operational_health
 from shared.logging.runtime_logger import log_event
 from shared.runtime_health import RuntimeValidationError, validate_runtime_startup
+from shared.telemetry import build_snapshot_context
 
 
-DEFAULT_OUTPUT_PATH = "generated/snapshots/CURRENT_PRIORITIES.generated.md"
+DEFAULT_OUTPUT_PATH = None
 
 # Add Custom Field Helpers for Priority Fix
 def _get_custom_field_value(task: Dict[str, Any], field_name: str) -> Optional[str]:
@@ -340,8 +341,10 @@ def group_tasks_by_section(tasks: List[Dict[str, Any]]) -> Dict[str, List[Dict[s
 def render_current_priorities_markdown(
     project_gid: str,
     tasks: List[Dict[str, Any]],
+    execution_id: str,
+    snapshot_date: str,
 ) -> str:
-    today = date.today().isoformat()
+    today = snapshot_date
     classified = classify_tasks(tasks)
     grouped = group_tasks_by_section([task for task in tasks if _is_open(task)])
 
@@ -363,7 +366,8 @@ def render_current_priorities_markdown(
     lines.append("")
     lines.append("## Snapshot Metadata")
     lines.append("")
-    lines.append(f"- Generated on: {today}")
+    lines.append(f"- Snapshot date: {today}")
+    lines.append(f"- Runtime execution ID: `{execution_id}`")
     lines.append(f"- Asana project GID: `{project_gid}`")
     lines.append(f"- Total tasks pulled: {len(tasks)}")
     lines.append(f"- Open tasks: {len(classified['open_tasks'])}")
@@ -487,7 +491,7 @@ def render_current_priorities_markdown(
 
 def generate_current_priorities(
     project_gid: Optional[str] = None,
-    output_path: str = DEFAULT_OUTPUT_PATH,
+    output_path: Optional[str] = DEFAULT_OUTPUT_PATH,
     limit: int = 100,
 ) -> Dict[str, Any]:
     """
@@ -500,9 +504,8 @@ def generate_current_priorities(
     load_dotenv()
     config = load_runtime_config()
     runtime_cfg = config.get("runtime", {})
-    paths_cfg = runtime_cfg.get("paths", {})
-    logs_dir = Path(paths_cfg.get("logs_dir", "generated/logs"))
-    runtime_log_file = logs_dir / str(runtime_cfg.get("logging", {}).get("runtime_log_file", "runtime.jsonl"))
+    snapshot_ctx = build_snapshot_context(runtime_cfg)
+    runtime_log_file = snapshot_ctx.runtime_log_file
 
     project_gid = project_gid or get_asana_project_gid(config)
 
@@ -516,6 +519,8 @@ def generate_current_priorities(
             status="failure",
             action="asana.generate_current_priorities",
             error=str(exc),
+            snapshot_date=snapshot_ctx.snapshot_date,
+            execution_id=snapshot_ctx.execution_id,
         )
         raise
 
@@ -525,6 +530,8 @@ def generate_current_priorities(
         severity="info",
         action="asana.generate_current_priorities",
         project_gid=project_gid,
+        snapshot_date=snapshot_ctx.snapshot_date,
+        execution_id=snapshot_ctx.execution_id,
     )
 
     try:
@@ -537,6 +544,8 @@ def generate_current_priorities(
             status="success",
             action="asana.generate_current_priorities",
             task_count=len(tasks),
+            snapshot_date=snapshot_ctx.snapshot_date,
+            execution_id=snapshot_ctx.execution_id,
         )
     except Exception as exc:
         log_event(
@@ -582,9 +591,11 @@ def generate_current_priorities(
     markdown = render_current_priorities_markdown(
         project_gid=project_gid,
         tasks=tasks,
+        execution_id=snapshot_ctx.execution_id,
+        snapshot_date=snapshot_ctx.snapshot_date,
     )
 
-    output = Path(output_path)
+    output = Path(output_path) if output_path else snapshot_ctx.priorities_file
     try:
         output.parent.mkdir(parents=True, exist_ok=True)
         output.write_text(markdown, encoding="utf-8")
@@ -607,6 +618,10 @@ def generate_current_priorities(
         action="asana.generate_current_priorities",
         project_gid=project_gid,
         task_count=len(tasks),
+        contradiction_count=contradiction_count,
+        snapshot_date=snapshot_ctx.snapshot_date,
+        execution_id=snapshot_ctx.execution_id,
+        status="success",
     )
 
     return {
@@ -617,6 +632,9 @@ def generate_current_priorities(
         "output_path": str(output),
         "task_count": len(tasks),
         "operational_signal_count": len(operational_signals),
+        "contradiction_count": contradiction_count,
+        "snapshot_date": snapshot_ctx.snapshot_date,
+        "execution_id": snapshot_ctx.execution_id,
         "errors": [],
     }
 

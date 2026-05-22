@@ -16,9 +16,9 @@ RWLV uses a single operational runtime for deterministic, repeatable execution o
 1. Load config from `configs/runtime.yaml` and `configs/asana.yaml`.
 2. Load secrets from `.env` (local) or container env vars.
 3. Pull Asana task data.
-4. Generate operational snapshot artifacts.
+4. Generate dated operational snapshot artifacts.
 5. Produce/send digest notifications.
-6. Write lightweight structured runtime logs.
+6. Write lightweight structured runtime logs in dated snapshot paths.
 
 ## Config and env model
 
@@ -32,8 +32,9 @@ RWLV uses a single operational runtime for deterministic, repeatable execution o
    - Reads config/env.
    - Pulls Asana tasks.
    - Runs operational intelligence.
-   - Writes snapshot to `generated/snapshots/CURRENT_PRIORITIES.generated.md`.
-   - Appends structured event logs to `generated/logs/runtime-events.jsonl`.
+   - Creates/uses `generated/snapshots/YYYY-MM-DD/`.
+   - Writes `CURRENT_PRIORITIES.generated.md` into that dated snapshot directory.
+   - Appends structured events to `generated/snapshots/YYYY-MM-DD/runtime.jsonl`.
 2. `scripts.send_priority_digest`
    - Reads snapshot.
    - Builds digest text.
@@ -42,8 +43,8 @@ RWLV uses a single operational runtime for deterministic, repeatable execution o
 
 ## Generated artifacts
 
-- `generated/snapshots/`: operational snapshot outputs.
-- `generated/logs/`: JSONL runtime events for observability and history.
+- `generated/snapshots/YYYY-MM-DD/CURRENT_PRIORITIES.generated.md`: historical state snapshot.
+- `generated/snapshots/YYYY-MM-DD/runtime.jsonl`: structured runtime events for that snapshot day.
 
 ## Container purpose and boundary
 
