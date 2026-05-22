@@ -19,6 +19,7 @@ from shared.config.runtime import (
 )
 from shared.logging.runtime_logger import log_event
 from shared.runtime_health import RuntimeValidationError, validate_runtime_startup
+from shared.telemetry import build_snapshot_context, resolve_latest_priorities_file
 
 
 WORKSPACE_ROOT = Path(__file__).resolve().parents[1]
@@ -415,14 +416,15 @@ def send_telegram_message(message: str) -> None:
 def main() -> None:
     load_dotenv(WORKSPACE_ROOT / ".env")
     runtime_config = load_runtime_config()
+    runtime_cfg = runtime_config.get("runtime", {})
+    snapshot_ctx = build_snapshot_context(runtime_cfg)
+    runtime_log_file = WORKSPACE_ROOT / snapshot_ctx.runtime_log_file
+    priorities_file = WORKSPACE_ROOT / resolve_latest_priorities_file(runtime_cfg)
+
     digest_cfg = runtime_config.get("runtime", {}).get("priority_digest", {})
     top_items_per_section = int(digest_cfg.get("top_items_per_section", 5))
     heartbeat_relative = digest_cfg.get("heartbeat_file", "HEARTBEAT.priority_digest.md")
     heartbeat_file = WORKSPACE_ROOT / str(heartbeat_relative)
-    runtime_cfg = runtime_config.get("runtime", {})
-    paths_cfg = runtime_cfg.get("paths", {})
-    logs_dir = WORKSPACE_ROOT / str(paths_cfg.get("logs_dir", "generated/logs"))
-    runtime_log_file = logs_dir / str(runtime_cfg.get("logging", {}).get("runtime_log_file", "runtime.jsonl"))
 
     try:
         validate_runtime_startup(runtime_config, ["TELEGRAM_BOT_TOKEN", "TELEGRAM_CHAT_ID"])
@@ -438,8 +440,8 @@ def main() -> None:
         )
         raise
 
-    if not PRIORITIES_FILE.exists():
-        message = f"Missing {PRIORITIES_FILE}. Run the Asana priority generator first."
+    if not priorities_file.exists():
+        message = f"Missing {priorities_file}. Run the Asana priority generator first."
         log_event(
             runtime_log_file,
             event_type="validation_failure",
@@ -450,13 +452,16 @@ def main() -> None:
         )
         raise FileNotFoundError(message)
 
-    markdown = PRIORITIES_FILE.read_text(encoding="utf-8")
+    markdown = priorities_file.read_text(encoding="utf-8")
 
     log_event(
         runtime_log_file,
         event_type="runtime_start",
         severity="info",
         action="scripts.send_priority_digest",
+        snapshot_date=snapshot_ctx.snapshot_date,
+        execution_id=snapshot_ctx.execution_id,
+        priorities_file=str(priorities_file),
     )
 
     try:
