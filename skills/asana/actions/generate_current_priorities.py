@@ -16,6 +16,7 @@ from shared.telemetry import (
     append_telemetry_snapshot,
     build_snapshot_context,
     extract_operational_metrics,
+    generate_telemetry_debug_artifacts,
 )
 
 
@@ -610,6 +611,41 @@ def generate_current_priorities(
     )
 
     try:
+        log_event(
+            runtime_log_file,
+            event_type="telemetry_decomposition_generation_started",
+            severity="info",
+            action="asana.generate_current_priorities",
+            snapshot_date=snapshot_ctx.snapshot_date,
+            execution_id=snapshot_ctx.execution_id,
+        )
+        debug_artifacts = generate_telemetry_debug_artifacts(
+            runtime_cfg=runtime_cfg,
+            snapshot_date=snapshot_ctx.snapshot_date,
+            tasks=tasks,
+            operational_signals=operational_signals,
+        )
+        log_event(
+            runtime_log_file,
+            event_type="telemetry_metric_contributors_counted",
+            severity="info",
+            action="asana.generate_current_priorities",
+            snapshot_date=snapshot_ctx.snapshot_date,
+            execution_id=snapshot_ctx.execution_id,
+            blocked_contributors_count=metrics.get("blocked_count", 0),
+            contradiction_contributors_count=metrics.get("contradiction_count", 0),
+            launch_risk_contributors_count=metrics.get("launch_risk_count", 0),
+        )
+        log_event(
+            runtime_log_file,
+            event_type="telemetry_debug_artifacts_generated",
+            severity="info",
+            action="asana.generate_current_priorities",
+            snapshot_date=snapshot_ctx.snapshot_date,
+            execution_id=snapshot_ctx.execution_id,
+            artifacts={name: str(path) for name, path in debug_artifacts.items()},
+        )
+
         telemetry_file = append_telemetry_snapshot(
             runtime_cfg=runtime_cfg,
             snapshot_date=snapshot_ctx.snapshot_date,

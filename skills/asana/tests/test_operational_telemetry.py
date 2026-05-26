@@ -1,8 +1,13 @@
 import json
 import tempfile
 from pathlib import Path
+from types import SimpleNamespace
 
-from shared.telemetry import append_telemetry_snapshot, extract_operational_metrics
+from shared.telemetry import (
+    append_telemetry_snapshot,
+    extract_operational_metrics,
+    generate_telemetry_debug_artifacts,
+)
 
 
 def field(name, value):
@@ -59,3 +64,39 @@ def test_append_telemetry_snapshot_writes_jsonl_record():
         assert payload["execution_id"] == "abc123"
         assert payload["task_count"] == 10
         assert payload["p0_count"] == 2
+
+
+def test_generate_telemetry_debug_artifacts_writes_contributor_files():
+    with tempfile.TemporaryDirectory() as tmpdir:
+        runtime_cfg = {"paths": {"telemetry_dir": str(Path(tmpdir) / "telemetry")}}
+        tasks = [
+            task("Blocked Task", "QA", health="Blocked"),
+            task("Healthy Task", "In Progress", health="On Track"),
+        ]
+        signals = [
+            SimpleNamespace(
+                signal_type="workflow_contradiction",
+                rule_name="detect_p4_in_progress",
+                severity="medium",
+                task_name="Healthy Task",
+                task_gid="healthy-task",
+                message="P4 task currently in progress.",
+            )
+        ]
+
+        artifacts = generate_telemetry_debug_artifacts(
+            runtime_cfg=runtime_cfg,
+            snapshot_date="2026-05-26",
+            tasks=tasks,
+            operational_signals=signals,
+        )
+
+        blocked = json.loads(Path(artifacts["blocked_tasks_2026-05-26.json"]).read_text(encoding="utf-8"))
+        contradictions = json.loads(Path(artifacts["contradiction_tasks_2026-05-26.json"]).read_text(encoding="utf-8"))
+        launch_risks = json.loads(Path(artifacts["launch_risk_tasks_2026-05-26.json"]).read_text(encoding="utf-8"))
+
+        assert blocked[0]["task_name"] == "Blocked Task"
+        assert blocked[0]["reason"] == "Health = Blocked"
+        assert contradictions[0]["task_name"] == "Healthy Task"
+        assert contradictions[0]["task_gid"] == "healthy-task"
+        assert launch_risks == []
