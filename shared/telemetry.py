@@ -72,6 +72,18 @@ def _is_open(task: Dict[str, Any]) -> bool:
     return not bool(task.get("completed"))
 
 
+def _task_contributor(task: Dict[str, Any], reason: str, relevant_fields: Dict[str, Any]) -> Dict[str, Any]:
+    payload: Dict[str, Any] = {
+        "task_name": task.get("name") or "Untitled task",
+        "reason": reason,
+        "relevant_fields": relevant_fields,
+    }
+    gid = task.get("gid")
+    if gid:
+        payload["task_gid"] = str(gid)
+    return payload
+
+
 def extract_operational_metrics(tasks: list[Dict[str, Any]], contradiction_count: int = 0, launch_risk_count: int = 0) -> Dict[str, int]:
     open_tasks = [task for task in tasks if _is_open(task)]
 
@@ -139,3 +151,85 @@ def append_telemetry_snapshot(runtime_cfg: Dict[str, Any], snapshot_date: str, e
         file.write(json.dumps(payload, sort_keys=True, ensure_ascii=False) + "\n")
 
     return telemetry_file
+
+
+def generate_telemetry_debug_artifacts(
+    *,
+    runtime_cfg: Dict[str, Any],
+    snapshot_date: str,
+    tasks: list[Dict[str, Any]],
+    operational_signals: list[Any],
+) -> Dict[str, Path]:
+    paths_cfg = runtime_cfg.get("paths", {}) if isinstance(runtime_cfg, dict) else {}
+    telemetry_dir = Path(paths_cfg.get("telemetry_dir", "generated/telemetry"))
+    debug_dir = telemetry_dir / "debug"
+    debug_dir.mkdir(parents=True, exist_ok=True)
+
+    blocked_status_values = {
+        "blocked",
+        "waiting on vendor",
+        "waiting on content",
+        "waiting on stakeholder",
+        "waiting approval",
+        "at risk",
+        "expedited",
+    }
+
+    contributors_blocked: list[Dict[str, Any]] = []
+    for task in tasks:
+        if not _is_open(task):
+            continue
+        health = ""
+        for field in task.get("custom_fields", []) or []:
+            if (field.get("name") or "").strip().lower() in {
+                "health and execution status",
+                "field health and execution status",
+                "execution status",
+                "health",
+                "health / execution status",
+                "health / execution",
+            }:
+                health = (field.get("display_value") or "").strip()
+                break
+        if health.strip().lower() in blocked_status_values:
+            contributors_blocked.append(
+                _task_contributor(
+                    task,
+                    reason=f"Health = {health}",
+                    relevant_fields={"health_execution_status": health},
+                )
+            )
+
+    contributors_contradictions: list[Dict[str, Any]] = []
+    for signal in operational_signals or []:
+        if getattr(signal, "signal_type", "") not in {"contradiction", "workflow_contradiction"}:
+            continue
+        entry: Dict[str, Any] = {
+            "task_name": getattr(signal, "task_name", "Untitled task"),
+            "reason": getattr(signal, "message", "Operational contradiction"),
+            "relevant_fields": {
+                "signal_type": getattr(signal, "signal_type", ""),
+                "rule_name": getattr(signal, "rule_name", ""),
+                "severity": getattr(signal, "severity", ""),
+            },
+        }
+        task_gid = getattr(signal, "task_gid", None)
+        if task_gid:
+            entry["task_gid"] = str(task_gid)
+        contributors_contradictions.append(entry)
+
+    contributors_launch_risk: list[Dict[str, Any]] = []
+
+    artifact_payloads = {
+        f"blocked_tasks_{snapshot_date}.json": contributors_blocked,
+        f"contradiction_tasks_{snapshot_date}.json": contributors_contradictions,
+        f"launch_risk_tasks_{snapshot_date}.json": contributors_launch_risk,
+    }
+
+    generated_paths: Dict[str, Path] = {}
+    for file_name, payload in artifact_payloads.items():
+        artifact_path = debug_dir / file_name
+        artifact_path.write_text(json.dumps(payload, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+        generated_paths[file_name] = artifact_path
+
+    return generated_paths
