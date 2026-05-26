@@ -16,6 +16,7 @@ paths:
   generated_dir: generated
   snapshots_dir: generated/snapshots
   logs_dir: generated/logs
+  telemetry_dir: generated/telemetry
 
 logging:
   runtime_log_file: runtime.jsonl

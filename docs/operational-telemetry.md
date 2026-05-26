@@ -43,3 +43,31 @@ These records are intentionally minimal while still enabling operational audits.
 ## Future direction (not in this phase)
 
 This phase does **not** add dashboards, databases, predictive systems, or BI tooling. Future phases can consume snapshot history for reporting and analytics without changing the core execution architecture.
+
+
+## Lightweight operational metrics persistence
+
+Phase D adds deterministic operational metrics extraction and append-only persistence:
+
+- telemetry path: `generated/telemetry/daily_operational_metrics.jsonl`
+- one metrics snapshot appended per runtime execution
+- no dashboarding, databases, or analytics engines in this phase
+
+Metrics are derived directly from runtime operational state and operational intelligence outputs, including:
+
+- total task count
+- open task count
+- P0 count
+- blocked count
+- in progress count
+- contradiction count
+- launch risk count
+- intake count
+- QA count
+- scheduled launch count
+
+This telemetry is explainable and auditable because each metric is generated from explicit section, priority, or health labels and persisted with `snapshot_date` and `execution_id`.
+
+## Future trend direction
+
+Historical telemetry snapshots are intended as a foundation for future trend analysis (e.g., contradiction trendlines, blocked work trendlines, launch readiness trendlines). Future phases can read this append-only file and build reporting layers without changing runtime execution architecture.

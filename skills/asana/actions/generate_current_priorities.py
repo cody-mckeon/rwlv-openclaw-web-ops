@@ -12,7 +12,11 @@ from shared.config.runtime import get_asana_project_gid, load_dotenv, load_runti
 from shared.intelligence.analyze_operational_health import analyze_operational_health
 from shared.logging.runtime_logger import log_event
 from shared.runtime_health import RuntimeValidationError, validate_runtime_startup
-from shared.telemetry import build_snapshot_context
+from shared.telemetry import (
+    append_telemetry_snapshot,
+    build_snapshot_context,
+    extract_operational_metrics,
+)
 
 
 DEFAULT_OUTPUT_PATH = None
@@ -341,10 +345,10 @@ def group_tasks_by_section(tasks: List[Dict[str, Any]]) -> Dict[str, List[Dict[s
 def render_current_priorities_markdown(
     project_gid: str,
     tasks: List[Dict[str, Any]],
-    execution_id: str,
-    snapshot_date: str,
+    execution_id: str = "manual",
+    snapshot_date: str | None = None,
 ) -> str:
-    today = snapshot_date
+    today = snapshot_date or date.today().isoformat()
     classified = classify_tasks(tasks)
     grouped = group_tasks_by_section([task for task in tasks if _is_open(task)])
 
@@ -588,6 +592,53 @@ def generate_current_priorities(
             count=contradiction_count,
         )
 
+
+    metrics = extract_operational_metrics(
+        tasks=tasks,
+        contradiction_count=contradiction_count,
+        launch_risk_count=0,
+    )
+
+    log_event(
+        runtime_log_file,
+        event_type="telemetry_metrics_generated",
+        severity="info",
+        action="asana.generate_current_priorities",
+        snapshot_date=snapshot_ctx.snapshot_date,
+        execution_id=snapshot_ctx.execution_id,
+        **metrics,
+    )
+
+    try:
+        telemetry_file = append_telemetry_snapshot(
+            runtime_cfg=runtime_cfg,
+            snapshot_date=snapshot_ctx.snapshot_date,
+            execution_id=snapshot_ctx.execution_id,
+            metrics=metrics,
+        )
+        log_event(
+            runtime_log_file,
+            event_type="telemetry_metrics_persisted",
+            severity="info",
+            action="asana.generate_current_priorities",
+            status="success",
+            telemetry_path=str(telemetry_file),
+            snapshot_date=snapshot_ctx.snapshot_date,
+            execution_id=snapshot_ctx.execution_id,
+        )
+    except Exception as exc:
+        log_event(
+            runtime_log_file,
+            event_type="telemetry_metrics_persisted",
+            severity="error",
+            action="asana.generate_current_priorities",
+            status="failure",
+            error=str(exc),
+            snapshot_date=snapshot_ctx.snapshot_date,
+            execution_id=snapshot_ctx.execution_id,
+        )
+        raise
+
     markdown = render_current_priorities_markdown(
         project_gid=project_gid,
         tasks=tasks,
@@ -633,6 +684,7 @@ def generate_current_priorities(
         "task_count": len(tasks),
         "operational_signal_count": len(operational_signals),
         "contradiction_count": contradiction_count,
+        "telemetry_metrics": metrics,
         "snapshot_date": snapshot_ctx.snapshot_date,
         "execution_id": snapshot_ctx.execution_id,
         "errors": [],
