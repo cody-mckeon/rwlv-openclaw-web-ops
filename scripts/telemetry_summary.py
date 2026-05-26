@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any, Dict, Iterable, List
 
 from shared.config.runtime import load_dotenv, load_runtime_config
+from shared.governance import evaluate_governance
 from shared.runtime_logging import log_event
 
 
@@ -146,6 +147,19 @@ def main() -> None:
     previous = history[-2]
     trend_lines = _trend_lines(previous, current)
 
+    governance = evaluate_governance(current)
+    previous_governance = evaluate_governance(previous)
+
+    log_event(
+        trend_log_file,
+        "governance.evaluated",
+        governance_state=governance.governance_state,
+        execution_pressure=governance.execution_pressure,
+        triggered_rules=governance.triggered_rules,
+        metrics=governance.contributing_metrics,
+        snapshot_date=str(current.get("snapshot_date", "")),
+    )
+
     log_event(
         trend_log_file,
         "telemetry_summary.generation_started",
@@ -175,9 +189,23 @@ def main() -> None:
     sections.append("## Deterministic Operational Observations")
     sections.extend(_deterministic_observations(current, previous))
     sections.append("")
+    sections.append("## Operational Governance")
+    sections.append(f"* Governance State: {governance.governance_state}")
+    sections.append(f"* Execution Pressure: {governance.execution_pressure}")
+    sections.append("")
+    sections.append("### Triggered Governance Rules")
+    if governance.triggered_rules:
+        sections.extend([f"* `{rule}`" for rule in governance.triggered_rules])
+    else:
+        sections.append("* None")
+    sections.append("")
+    sections.append("### Governance Explanation")
+    sections.extend([f"* {reason}" for reason in governance.reasons])
+    sections.append("")
     sections.append("## Explainability")
     sections.append("* Trend deltas are direct arithmetic comparisons from append-only daily operational metrics snapshots.")
     sections.append("* Observation statements are rule-based and only emitted when deterministic metric conditions are met.")
+    sections.append("* Governance state and execution pressure are deterministic rule evaluations over the same append-only telemetry metrics.")
 
     summary_file.parent.mkdir(parents=True, exist_ok=True)
     summary_file.write_text("\n".join(sections) + "\n", encoding="utf-8")
@@ -190,6 +218,16 @@ def main() -> None:
         trend_line_count=len(trend_lines),
         snapshot_count=len(history),
     )
+    log_event(
+        trend_log_file,
+        "governance.transition_observed",
+        previous_state=previous_governance.governance_state,
+        current_state=governance.governance_state,
+        changed=previous_governance.governance_state != governance.governance_state,
+        previous_snapshot_date=str(previous.get("snapshot_date", "")),
+        current_snapshot_date=str(current.get("snapshot_date", "")),
+    )
+
     log_event(
         trend_log_file,
         "telemetry_summary.comparison_completed",

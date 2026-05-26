@@ -136,3 +136,84 @@ Deterministic trend summaries are intended to support:
 - future outcome measurement baselines
 
 This phase still avoids predictive intelligence and preserves architecture simplicity while enabling historical telemetry interpretation.
+
+## Deterministic operational governance modeling (Phase E)
+
+Phase E adds deterministic governance classification with no AI scoring, prediction, or ML behavior.
+
+### Governance model location
+
+- module: `shared/governance/health_model.py`
+- output type: `GovernanceClassification`
+- evaluation entrypoint: `evaluate_governance(metrics)`
+
+### Governance states
+
+The classifier emits one deterministic governance state per metrics snapshot:
+
+- `Healthy`
+- `Degraded`
+- `At Risk`
+- `Unstable`
+- `Overloaded`
+
+State assignment is rule-driven, explainable, and auditable from persisted metrics.
+
+### Example deterministic governance rules
+
+Representative rule semantics include:
+
+- if `blocked_count > in_progress_count` → state promotion to `Degraded`
+- if `contradiction_count > 3` → state promotion to `At Risk`
+- if `contradiction_count > 5` → state promotion to `Unstable`
+- if interrupt/dependency pressure thresholds are exceeded → state promotion to `Overloaded`
+- if `intake_count > in_progress_count * 2` → execution pressure set to `Increasing`
+
+State transitions follow deterministic severity promotion (`Healthy` < `Degraded` < `At Risk` < `Unstable` < `Overloaded`).
+
+### Explainability semantics
+
+Each governance evaluation produces:
+
+- `governance_state`
+- `execution_pressure`
+- `triggered_rules`
+- `reasons`
+- `contributing_metrics`
+
+This allows every classification decision to be traced back to explicit metric values and explicit triggered rules.
+
+### Telemetry summary integration
+
+`scripts/telemetry_summary.py` now embeds governance output into the deterministic daily summary:
+
+- governance state
+- triggered governance rules
+- governance explanation reasons
+- execution pressure indicator
+
+### Governance runtime logging
+
+Governance evaluation events are appended to:
+
+- `generated/telemetry/trend_analysis.jsonl`
+
+Logged event types include:
+
+- `governance.evaluated`
+- `governance.transition_observed`
+
+This preserves historical governance auditability and state transition traceability without introducing external analytics systems.
+
+### Architecture constraints preserved
+
+Phase E continues to intentionally avoid:
+
+- AI-generated scoring
+- predictive systems
+- LLM operational recommendations
+- black-box analytics
+- dashboards
+- ML-based governance systems
+
+Governance modeling is deterministic operational classification only.
