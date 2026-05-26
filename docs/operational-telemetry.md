@@ -218,6 +218,76 @@ Phase E continues to intentionally avoid:
 
 Governance modeling is deterministic operational classification only.
 
+## Deterministic escalation routing and operational visibility (Phase E extension)
+
+Phase E now extends escalation modeling with deterministic operational visibility routing and notification semantics.
+
+### Operational visibility philosophy
+
+Routing is designed for coordination and intervention readiness, not alert spam:
+
+- increase visibility when deterministic escalation pressure persists
+- preserve explainability through explicit routing reasons
+- keep outputs auditable from telemetry and escalation state alone
+- avoid autonomous remediation and AI-generated recommendations
+
+### Escalation routing model location
+
+- module: `shared/governance/escalation_routing.py`
+- output type: `EscalationRoutingDecision`
+- routing entrypoint: `derive_escalation_routing(escalation)`
+
+### Visibility levels
+
+The router emits one deterministic visibility level per evaluated escalation state:
+
+- `Normal Visibility`
+- `Team Awareness`
+- `Leadership Visibility Recommended`
+- `Critical Operational Attention`
+
+Representative deterministic mappings include:
+
+- `Escalation State = Elevated` → `Team Awareness`
+- `Escalation State = Escalated` → `Leadership Visibility Recommended`
+- `Operational Instability = True` → `Critical Operational Attention`
+
+### Governance notification semantics
+
+Routing outputs deterministic notification semantics intended as operational summaries:
+
+- `Operational Pressure Digest`
+- `Vendor Dependency Escalation`
+- `Launch Governance Alert`
+- `Persistent Overload Warning`
+
+These are deterministic coordination signals only; they are not AI-generated recommendations and do not trigger autonomous actions.
+
+### Telemetry summary integration
+
+`scripts/telemetry_summary.py` now includes:
+
+- visibility level
+- routing reason
+- operational attention indicator
+- notification semantics
+
+This extends trend summaries into deterministic operational visibility reporting while preserving architecture simplicity.
+
+### Routing runtime logging
+
+Routing decisions and transitions are appended to:
+
+- `generated/telemetry/trend_analysis.jsonl`
+
+Logged event families include:
+
+- `escalation.routing_decision`
+- `escalation.attention_transition_observed`
+- `escalation.routing_transition_event`
+
+This preserves auditability for visibility transitions without introducing notification delivery systems.
+
 ## Deterministic operational escalation semantics (Phase E continuation)
 
 Phase E now extends governance modeling with persistence-aware deterministic escalation semantics.
