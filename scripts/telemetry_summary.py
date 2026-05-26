@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Any, Dict, Iterable, List
 
 from shared.config.runtime import load_dotenv, load_runtime_config
-from shared.governance import evaluate_escalation, evaluate_governance
+from shared.governance import derive_escalation_routing, evaluate_escalation, evaluate_governance
 from shared.runtime_logging import log_event
 
 
@@ -152,6 +152,8 @@ def main() -> None:
 
     escalation = evaluate_escalation(history)
     previous_escalation = evaluate_escalation(history[:-1])
+    routing = derive_escalation_routing(escalation)
+    previous_routing = derive_escalation_routing(previous_escalation)
 
     log_event(
         trend_log_file,
@@ -173,6 +175,16 @@ def main() -> None:
         triggered_rules=escalation.triggered_rules,
         persistence_indicators=escalation.persistence_indicators,
         metrics=escalation.contributing_metrics,
+        snapshot_date=str(current.get("snapshot_date", "")),
+    )
+    log_event(
+        trend_log_file,
+        "escalation.routing_decision",
+        visibility_level=routing.visibility_level,
+        routing_reason=routing.routing_reason,
+        operational_attention=routing.operational_attention,
+        notification_semantics=routing.notification_semantics,
+        escalation_state=escalation.escalation_state,
         snapshot_date=str(current.get("snapshot_date", "")),
     )
 
@@ -241,6 +253,14 @@ def main() -> None:
     sections.append("")
     sections.append("### Intervention Semantics")
     sections.extend([f"* {item}" for item in escalation.intervention_semantics])
+    sections.append("")
+    sections.append("## Deterministic Escalation Routing")
+    sections.append(f"* Visibility Level: {routing.visibility_level}")
+    sections.append(f"* Operational Attention Indicator: {routing.operational_attention}")
+    sections.append(f"* Routing Reason: {routing.routing_reason}")
+    sections.append("")
+    sections.append("### Operational Notification Semantics")
+    sections.extend([f"* {item}" for item in routing.notification_semantics])
 
 
     sections.append("## Explainability")
@@ -248,6 +268,7 @@ def main() -> None:
     sections.append("* Observation statements are rule-based and only emitted when deterministic metric conditions are met.")
     sections.append("* Governance state and execution pressure are deterministic rule evaluations over the same append-only telemetry metrics.")
     sections.append("* Escalation state, triggers, and intervention semantics are persistence-aware deterministic evaluations over historical telemetry snapshots.")
+    sections.append("* Visibility routing and notification semantics are deterministic mappings from escalation state and persistence indicators.")
     summary_file.parent.mkdir(parents=True, exist_ok=True)
     summary_file.write_text("\n".join(sections) + "\n", encoding="utf-8")
 
@@ -280,6 +301,18 @@ def main() -> None:
         dependency_escalation=escalation.dependency_escalation,
         operational_instability=escalation.operational_instability,
     )
+    log_event(
+        trend_log_file,
+        "escalation.attention_transition_observed",
+        previous_visibility_level=previous_routing.visibility_level,
+        current_visibility_level=routing.visibility_level,
+        visibility_changed=previous_routing.visibility_level != routing.visibility_level,
+        previous_operational_attention=previous_routing.operational_attention,
+        current_operational_attention=routing.operational_attention,
+        attention_changed=previous_routing.operational_attention != routing.operational_attention,
+        previous_snapshot_date=str(previous.get("snapshot_date", "")),
+        current_snapshot_date=str(current.get("snapshot_date", "")),
+    )
 
     if previous_escalation.escalation_state != escalation.escalation_state:
         log_event(
@@ -289,6 +322,16 @@ def main() -> None:
             to_state=escalation.escalation_state,
             triggers=escalation.triggered_rules,
             persistence_indicators=escalation.persistence_indicators,
+            snapshot_date=str(current.get("snapshot_date", "")),
+        )
+    if previous_routing.visibility_level != routing.visibility_level:
+        log_event(
+            trend_log_file,
+            "escalation.routing_transition_event",
+            from_visibility_level=previous_routing.visibility_level,
+            to_visibility_level=routing.visibility_level,
+            operational_attention=routing.operational_attention,
+            notification_semantics=routing.notification_semantics,
             snapshot_date=str(current.get("snapshot_date", "")),
         )
 
