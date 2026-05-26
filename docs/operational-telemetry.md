@@ -217,3 +217,83 @@ Phase E continues to intentionally avoid:
 - ML-based governance systems
 
 Governance modeling is deterministic operational classification only.
+
+## Deterministic operational escalation semantics (Phase E continuation)
+
+Phase E now extends governance modeling with persistence-aware deterministic escalation semantics.
+
+### Escalation model location
+
+- module: `shared/governance/escalation_model.py`
+- output type: `EscalationClassification`
+- evaluation entrypoint: `evaluate_escalation(history)`
+
+### Escalation states
+
+Escalation classification emits one deterministic escalation state per telemetry history evaluation:
+
+- `Normal`
+- `Elevated`
+- `Escalated`
+- `Critical`
+
+State assignment is deterministic, explainable, and auditable from append-only telemetry history.
+
+### Persistence-aware escalation rules
+
+Representative persistence rules include:
+
+- if governance state remains `Overloaded` across 3+ consecutive snapshots → escalate to at least `Elevated`
+- if `blocked_count` strictly increases across 5+ consecutive snapshots → set dependency escalation and promote to at least `Escalated`
+- if `p0_count > 0` across 3+ consecutive snapshots → set operational instability and promote to `Critical`
+
+Escalation intentionally models persistent pressure and intervention-worthy operational conditions, not transient single-snapshot volatility.
+
+### Escalation explainability and intervention semantics
+
+Each escalation evaluation emits:
+
+- `escalation_state`
+- `dependency_escalation`
+- `operational_instability`
+- `triggered_rules`
+- `reasons`
+- `persistence_indicators`
+- `contributing_metrics`
+- `intervention_semantics`
+
+This provides deterministic explainability and operational intervention awareness without introducing AI recommendations or autonomous actions.
+
+### Telemetry summary integration
+
+`scripts/telemetry_summary.py` now includes escalation sections in deterministic daily summaries:
+
+- escalation state
+- escalation triggers
+- persistence indicators
+- escalation explanation
+- intervention semantics
+
+### Escalation runtime logging
+
+Escalation evaluations are appended to `generated/telemetry/trend_analysis.jsonl` with explicit event types:
+
+- `escalation.evaluated`
+- `escalation.transition_observed`
+- `escalation.persistence_event` (when state transitions occur)
+
+This preserves historical traceability of persistence-driven escalation behavior.
+
+### Operational philosophy preserved
+
+This phase remains intentionally constrained to deterministic operational escalation semantics only.
+
+Still excluded:
+
+- AI copilots
+- autonomous remediation
+- automated messaging systems
+- dashboards/databases
+- ML or black-box escalation scoring
+
+The objective is operational governance trust, leadership visibility, and intervention awareness through deterministic rules.

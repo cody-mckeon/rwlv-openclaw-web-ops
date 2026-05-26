@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Any, Dict, Iterable, List
 
 from shared.config.runtime import load_dotenv, load_runtime_config
-from shared.governance import evaluate_governance
+from shared.governance import evaluate_escalation, evaluate_governance
 from shared.runtime_logging import log_event
 
 
@@ -150,6 +150,9 @@ def main() -> None:
     governance = evaluate_governance(current)
     previous_governance = evaluate_governance(previous)
 
+    escalation = evaluate_escalation(history)
+    previous_escalation = evaluate_escalation(history[:-1])
+
     log_event(
         trend_log_file,
         "governance.evaluated",
@@ -157,6 +160,19 @@ def main() -> None:
         execution_pressure=governance.execution_pressure,
         triggered_rules=governance.triggered_rules,
         metrics=governance.contributing_metrics,
+        snapshot_date=str(current.get("snapshot_date", "")),
+    )
+
+
+    log_event(
+        trend_log_file,
+        "escalation.evaluated",
+        escalation_state=escalation.escalation_state,
+        dependency_escalation=escalation.dependency_escalation,
+        operational_instability=escalation.operational_instability,
+        triggered_rules=escalation.triggered_rules,
+        persistence_indicators=escalation.persistence_indicators,
+        metrics=escalation.contributing_metrics,
         snapshot_date=str(current.get("snapshot_date", "")),
     )
 
@@ -202,11 +218,36 @@ def main() -> None:
     sections.append("### Governance Explanation")
     sections.extend([f"* {reason}" for reason in governance.reasons])
     sections.append("")
+
+    sections.append("")
+    sections.append("## Deterministic Escalation Semantics")
+    sections.append(f"* Escalation State: {escalation.escalation_state}")
+    sections.append(f"* Dependency Escalation: {escalation.dependency_escalation}")
+    sections.append(f"* Operational Instability: {escalation.operational_instability}")
+    sections.append("")
+    sections.append("### Escalation Triggers")
+    if escalation.triggered_rules:
+        sections.extend([f"* `{rule}`" for rule in escalation.triggered_rules])
+    else:
+        sections.append("* None")
+    sections.append("")
+    sections.append("### Persistence Indicators")
+    sections.append(f"* Overloaded Consecutive Snapshots: {escalation.persistence_indicators.get('overloaded_consecutive', 0)}")
+    sections.append(f"* Blocked Increase Consecutive Snapshots: {escalation.persistence_indicators.get('blocked_increase_consecutive', 0)}")
+    sections.append(f"* P0 Active Consecutive Snapshots: {escalation.persistence_indicators.get('p0_active_consecutive', 0)}")
+    sections.append("")
+    sections.append("### Escalation Explanation")
+    sections.extend([f"* {reason}" for reason in escalation.reasons])
+    sections.append("")
+    sections.append("### Intervention Semantics")
+    sections.extend([f"* {item}" for item in escalation.intervention_semantics])
+
+
     sections.append("## Explainability")
     sections.append("* Trend deltas are direct arithmetic comparisons from append-only daily operational metrics snapshots.")
     sections.append("* Observation statements are rule-based and only emitted when deterministic metric conditions are met.")
     sections.append("* Governance state and execution pressure are deterministic rule evaluations over the same append-only telemetry metrics.")
-
+    sections.append("* Escalation state, triggers, and intervention semantics are persistence-aware deterministic evaluations over historical telemetry snapshots.")
     summary_file.parent.mkdir(parents=True, exist_ok=True)
     summary_file.write_text("\n".join(sections) + "\n", encoding="utf-8")
 
@@ -227,6 +268,29 @@ def main() -> None:
         previous_snapshot_date=str(previous.get("snapshot_date", "")),
         current_snapshot_date=str(current.get("snapshot_date", "")),
     )
+
+    log_event(
+        trend_log_file,
+        "escalation.transition_observed",
+        previous_state=previous_escalation.escalation_state,
+        current_state=escalation.escalation_state,
+        changed=previous_escalation.escalation_state != escalation.escalation_state,
+        previous_snapshot_date=str(previous.get("snapshot_date", "")),
+        current_snapshot_date=str(current.get("snapshot_date", "")),
+        dependency_escalation=escalation.dependency_escalation,
+        operational_instability=escalation.operational_instability,
+    )
+
+    if previous_escalation.escalation_state != escalation.escalation_state:
+        log_event(
+            trend_log_file,
+            "escalation.persistence_event",
+            from_state=previous_escalation.escalation_state,
+            to_state=escalation.escalation_state,
+            triggers=escalation.triggered_rules,
+            persistence_indicators=escalation.persistence_indicators,
+            snapshot_date=str(current.get("snapshot_date", "")),
+        )
 
     log_event(
         trend_log_file,
