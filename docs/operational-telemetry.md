@@ -87,3 +87,52 @@ These files map aggregate counts back to task-level contributors (`task_name`, o
 ## Future trend direction
 
 Historical telemetry snapshots are intended as a foundation for future trend analysis (e.g., contradiction trendlines, blocked work trendlines, launch readiness trendlines). Future phases can read this append-only file and build reporting layers without changing runtime execution architecture.
+
+## Deterministic historical trend analysis
+
+Phase D extends telemetry foundations with deterministic historical trend interpretation via:
+
+- `scripts/telemetry_summary.py`
+- telemetry source: `generated/telemetry/daily_operational_metrics.jsonl`
+- deterministic summary output: `generated/telemetry/daily_operational_trends.md`
+- structured trend runtime log: `generated/telemetry/trend_analysis.jsonl`
+
+### Trend analysis philosophy
+
+Trend interpretation remains governance-first and explainable:
+
+- no dashboarding, BI platforms, pandas analytics stacks, or databases
+- no AI-generated recommendations, predictive forecasting, or black-box scoring
+- no LLM-generated operational narrative dependencies
+
+All trend statements are deterministic rule outputs grounded in explicit metric deltas.
+
+### Deterministic trend calculations
+
+The summary script compares:
+
+- current snapshot vs previous snapshot
+- recent historical movement (up to the latest 7 snapshots)
+
+Metric deltas are rendered with explicit arithmetic semantics such as:
+
+- increased (`previous → current`, `+delta`)
+- reduced (`previous → current`, negative delta)
+- stable (`current value` unchanged)
+
+This keeps the trend layer fully auditable and reproducible from append-only telemetry state.
+
+### Lightweight operational observations
+
+Observation lines are deterministic operational heuristics based on metric relationships (for example blocked, intake, in-progress, QA, and contradiction shifts). They are intentionally constrained to operational interpretation only.
+
+### Operational governance direction
+
+Deterministic trend summaries are intended to support:
+
+- operational visibility
+- governance checkpoints
+- client reporting context
+- future outcome measurement baselines
+
+This phase still avoids predictive intelligence and preserves architecture simplicity while enabling historical telemetry interpretation.
