@@ -22,7 +22,11 @@ logging:
   runtime_log_file: runtime.jsonl
 
 
-runtime_service:
-  schedule_interval_seconds: 1800
+scheduler_runtime:
+  mode: deterministic_internal_scheduler
   heartbeat_interval_seconds: 300
-  mode: internal_loop
+  poll_interval_seconds: 1
+  jobs:
+    generate_current_priorities_interval_seconds: 1800
+    send_priority_digest_interval_seconds: 1800
+    generate_telemetry_summary_interval_seconds: 3600

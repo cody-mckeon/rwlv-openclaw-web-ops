@@ -2,7 +2,7 @@
 
 ## Purpose
 
-RWLV uses a single operational runtime for deterministic, repeatable execution of Asana retrieval, operational intelligence generation, and Telegram digest delivery.
+RWLV uses a single operational runtime for deterministic, repeatable execution of Asana retrieval, operational intelligence generation, telemetry summarization, and Telegram digest delivery.
 
 ## Runtime environments
 
@@ -18,7 +18,8 @@ RWLV uses a single operational runtime for deterministic, repeatable execution o
 3. Pull Asana task data.
 4. Generate dated operational snapshot artifacts.
 5. Produce/send digest notifications.
-6. Write lightweight structured runtime logs in dated snapshot paths.
+6. Generate deterministic telemetry trend summary artifacts.
+7. Write lightweight structured runtime logs.
 
 ## Config and env model
 
@@ -26,70 +27,57 @@ RWLV uses a single operational runtime for deterministic, repeatable execution o
 - Asana identifiers/config: `configs/asana.yaml`
 - Secrets: `.env` and injected environment variables
 
-## Execution flow
+## Deterministic internal scheduler runtime
+
+The runtime container owns scheduling through `runtime/scheduler.py`.
+
+- Service command: `python3 -m runtime.scheduler`
+- Startup event: `scheduler_started`
+- Recurring heartbeat event: `scheduler_heartbeat`
+- Per-job lifecycle events: `scheduled_job_triggered`, `scheduled_job_completed`, `scheduled_job_failed`
+- Runtime uptime semantics are included in scheduler heartbeat and job lifecycle events.
+
+This keeps orchestration deterministic and container-owned without adding cron daemons, distributed workers, or external orchestration systems.
+
+## Scheduling semantics
+
+Scheduler cadence is deterministic and interval-based.
+
+- `RUNTIME_SCHEDULER_POLL_SECONDS`: loop poll cadence.
+- `RUNTIME_HEARTBEAT_INTERVAL_SECONDS`: heartbeat cadence.
+- `RUNTIME_JOB_GENERATE_PRIORITIES_INTERVAL_SECONDS`
+- `RUNTIME_JOB_PRIORITY_DIGEST_INTERVAL_SECONDS`
+- `RUNTIME_JOB_TELEMETRY_SUMMARY_INTERVAL_SECONDS`
+
+Each job uses stable interval windows and a deterministic next-run calculation. If a run is delayed, the scheduler advances to the correct subsequent deterministic window rather than introducing random jitter.
+
+## Scheduled operational jobs
 
 1. `skills.asana.actions.generate_current_priorities`
-   - Reads config/env.
-   - Pulls Asana tasks.
-   - Runs operational intelligence.
-   - Creates/uses `generated/snapshots/YYYY-MM-DD/`.
-   - Writes `CURRENT_PRIORITIES.generated.md` into that dated snapshot directory.
-   - Appends structured events to `generated/snapshots/YYYY-MM-DD/runtime.jsonl`.
 2. `scripts.send_priority_digest`
-   - Reads snapshot.
-   - Builds digest text.
-   - Sends to Telegram.
-   - Logs digest send status and runtime events.
+3. `scripts.telemetry_summary`
 
-## Generated artifacts
+Jobs run inside the same container lifecycle. Failures are logged and do not stop the scheduler loop, preserving operational continuity.
 
-- `generated/snapshots/YYYY-MM-DD/CURRENT_PRIORITIES.generated.md`: historical state snapshot.
-- `generated/snapshots/YYYY-MM-DD/runtime.jsonl`: structured runtime events for that snapshot day.
+## Generated artifacts and persistence
 
-## Container purpose and boundary
-
-The container is intentionally focused on operational runtime execution only. It is not a Kubernetes service, distributed orchestrator, or cloud deployment abstraction.
-
-This phase preserves the current architecture while improving runtime clarity, portability, and observability foundations for future VPS readiness.
-
-
-## Persistent runtime service (Phase C)
-
-The runtime now executes as a long-running container service via `docker compose up -d rwlv-runtime`.
-
-### Deterministic runtime lifecycle
-
-- Service command: `python3 -m scripts.runtime_service`
-- Startup emits `runtime_started` and `scheduler_active`
-- Runtime remains alive independent of terminal sessions
-- Restart policy: `unless-stopped` for crash/reboot recovery
-
-### Container-owned scheduling
-
-Scheduling is now owned inside the runtime container using a lightweight internal loop.
-
-- `RUNTIME_SCHEDULE_INTERVAL_SECONDS` controls scheduled run cadence
-- `RUNTIME_HEARTBEAT_INTERVAL_SECONDS` controls heartbeat cadence
-- Scheduled cycle runs:
-  1. `skills.asana.actions.generate_current_priorities`
-  2. `scripts.send_priority_digest`
-
-### Operational uptime semantics
-
-Structured runtime logs append uptime semantics to `generated/logs/runtime.jsonl`:
-
-- `runtime_started`
-- `scheduler_active`
-- `runtime_heartbeat`
-- `scheduled_execution_triggered`
-- `scheduled_execution_completed`
-- `scheduled_execution_failed`
-- `scheduler_sleeping`
-
-### Persistent operational artifacts
-
-The runtime persists outputs through bind-mounted host paths so operational history survives container recreation:
+The runtime writes generated artifacts under:
 
 - `generated/`
 - `generated/logs/`
 - `generated/telemetry/`
+
+In Docker, the host bind mount `./generated:/app/generated` preserves operational history across container restarts/recreation while keeping the architecture lightweight and file-based.
+
+## Container purpose and boundary
+
+The container is intentionally focused on deterministic operational runtime execution only.
+
+This phase explicitly avoids:
+
+- Linux cron daemons
+- Kubernetes or distributed orchestration
+- Airflow/Celery/Redis job systems
+- cloud schedulers and queue infrastructure
+
+The design goal is trusted, repeatable operational execution with minimal orchestration complexity.
