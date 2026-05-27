@@ -1035,3 +1035,54 @@ Operational runtime management remains intentionally lightweight and client-safe
 - inspectable file-based artifacts over hidden systems
 - explicit operational checks over implicit assumptions
 - no Kubernetes, dashboards, distributed queues, or databases in this phase
+
+
+## Persistent Operational Runtime (Phase C)
+
+This phase upgrades the runtime from developer-invoked container commands to a persistent single-node operational service.
+
+### Goals
+
+- Long-running deterministic runtime lifecycle
+- Container-owned scheduling (no host cron dependency)
+- Automatic restart recovery (`restart: unless-stopped`)
+- Durable generated/log/telemetry outputs via mounted `generated/`
+- Explicit runtime uptime semantics in structured logs
+
+### Start runtime service
+
+```bash
+docker compose up -d rwlv-runtime
+```
+
+### Follow runtime logs
+
+```bash
+docker compose logs -f rwlv-runtime
+```
+
+### Stop runtime service
+
+```bash
+docker compose stop rwlv-runtime
+```
+
+### Runtime semantics
+
+The runtime emits structured lifecycle semantics to `generated/logs/runtime.jsonl` including:
+
+- `runtime_started`
+- `scheduler_active`
+- `runtime_heartbeat`
+- `scheduled_execution_triggered`
+
+### Operational philosophy
+
+This remains intentionally simple infrastructure:
+
+- single-node
+- containerized
+- deterministic
+- operationally inspectable
+
+It intentionally excludes Kubernetes, distributed queues, cloud schedulers, and database-backed orchestration in this phase.

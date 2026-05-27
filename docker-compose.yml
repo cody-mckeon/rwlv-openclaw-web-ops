@@ -6,8 +6,11 @@ services:
     working_dir: /app
     env_file:
       - .env
+    environment:
+      RUNTIME_SCHEDULE_INTERVAL_SECONDS: ${RUNTIME_SCHEDULE_INTERVAL_SECONDS:-1800}
+      RUNTIME_HEARTBEAT_INTERVAL_SECONDS: ${RUNTIME_HEARTBEAT_INTERVAL_SECONDS:-300}
     volumes:
       - .:/app
       - ./generated:/app/generated
-    stdin_open: true
-    tty: true
+    restart: unless-stopped
+    command: ["python3", "-m", "scripts.runtime_service"]
