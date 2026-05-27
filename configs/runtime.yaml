@@ -7,6 +7,14 @@ timezone: UTC
 priority_digest:
   top_items_per_section: 5
   heartbeat_file: HEARTBEAT.priority_digest.md
+  state_file: generated/logs/priority_digest_state.json
+  schedule:
+    enabled: true
+    timezone: UTC
+    weekdays: [0, 1, 2, 3, 4]
+    window_start: "08:30"
+    max_sends_per_day: 1
+    cooldown_seconds: 21600
 
 operational_intelligence:
   enabled: true
