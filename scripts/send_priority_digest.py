@@ -4,9 +4,11 @@ from __future__ import annotations
 
 import os
 import re
+import json
 from datetime import datetime
 from pathlib import Path
-from typing import List, Optional
+from typing import Any, Dict, List, Optional
+from zoneinfo import ZoneInfo
 from urllib.error import HTTPError
 from urllib.parse import urlencode
 from urllib.request import Request, urlopen
@@ -25,6 +27,7 @@ from shared.telemetry import build_snapshot_context, resolve_latest_priorities_f
 WORKSPACE_ROOT = Path(__file__).resolve().parents[1]
 PRIORITIES_FILE = WORKSPACE_ROOT / "generated/snapshots/CURRENT_PRIORITIES.generated.md"
 DEFAULT_HEARTBEAT_FILE = WORKSPACE_ROOT / "HEARTBEAT.priority_digest.md"
+DEFAULT_STATE_FILE = WORKSPACE_ROOT / "generated/logs/priority_digest_state.json"
 
 
 
@@ -412,6 +415,71 @@ def send_telegram_message(message: str) -> None:
             ) from exc
 
 
+def _load_digest_state(path: Path) -> Dict[str, Any]:
+    if not path.exists():
+        return {}
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except Exception:
+        return {}
+
+
+def _save_digest_state(path: Path, payload: Dict[str, Any]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+
+
+def _evaluate_digest_schedule(cfg: Dict[str, Any], now: datetime, state: Dict[str, Any]) -> Dict[str, Any]:
+    schedule = cfg.get("schedule", {}) if isinstance(cfg, dict) else {}
+    enabled = bool(schedule.get("enabled", True))
+    timezone_name = str(schedule.get("timezone", "UTC"))
+    allowed_weekdays = schedule.get("weekdays", [0, 1, 2, 3, 4])
+    window_start = str(schedule.get("window_start", "08:30"))
+    max_per_day = int(schedule.get("max_sends_per_day", 1))
+    cooldown_seconds = int(schedule.get("cooldown_seconds", 21600))
+
+    local_now = now.astimezone(ZoneInfo(timezone_name))
+    hh, mm = [int(part) for part in window_start.split(":", 1)]
+    scheduled_dt = local_now.replace(hour=hh, minute=mm, second=0, microsecond=0)
+
+    last_sent_at = state.get("last_sent_at")
+    last_sent_local = None
+    if last_sent_at:
+        try:
+            last_sent_local = datetime.fromisoformat(last_sent_at).astimezone(ZoneInfo(timezone_name))
+        except ValueError:
+            last_sent_local = None
+
+    reasons: List[str] = []
+    should_send = True
+
+    if not enabled:
+        should_send = False
+        reasons.append("schedule_disabled")
+    if local_now.weekday() not in allowed_weekdays:
+        should_send = False
+        reasons.append("weekday_not_allowed")
+    if local_now < scheduled_dt:
+        should_send = False
+        reasons.append("before_delivery_window")
+    if last_sent_local and last_sent_local.date() == local_now.date() and max_per_day <= 1:
+        should_send = False
+        reasons.append("max_per_day_reached")
+    if last_sent_local:
+        elapsed = (local_now - last_sent_local).total_seconds()
+        if elapsed < cooldown_seconds:
+            should_send = False
+            reasons.append("cooldown_active")
+
+    return {
+        "should_send": should_send,
+        "reasons": reasons or ["window_open"],
+        "scheduled_window_local": scheduled_dt.isoformat(),
+        "evaluated_at_local": local_now.isoformat(),
+        "timezone": timezone_name,
+    }
+
+
 
 def main() -> None:
     load_dotenv(WORKSPACE_ROOT / ".env")
@@ -425,6 +493,7 @@ def main() -> None:
     top_items_per_section = int(digest_cfg.get("top_items_per_section", 5))
     heartbeat_relative = digest_cfg.get("heartbeat_file", "HEARTBEAT.priority_digest.md")
     heartbeat_file = WORKSPACE_ROOT / str(heartbeat_relative)
+    state_file = WORKSPACE_ROOT / str(digest_cfg.get("state_file", str(DEFAULT_STATE_FILE.relative_to(WORKSPACE_ROOT))))
 
     try:
         validate_runtime_startup(runtime_config, ["TELEGRAM_BOT_TOKEN", "TELEGRAM_CHAT_ID"])
@@ -463,6 +532,27 @@ def main() -> None:
         execution_id=snapshot_ctx.execution_id,
         priorities_file=str(priorities_file),
     )
+    state = _load_digest_state(state_file)
+    schedule_eval = _evaluate_digest_schedule(digest_cfg, datetime.now(tz=ZoneInfo("UTC")), state)
+    log_event(
+        runtime_log_file,
+        event_type="digest_schedule_evaluated",
+        severity="info",
+        trigger_reason="scheduler_interval",
+        schedule_decision="send" if schedule_eval["should_send"] else "suppress",
+        schedule_reasons=schedule_eval["reasons"],
+        scheduled_window_local=schedule_eval["scheduled_window_local"],
+        evaluated_at_local=schedule_eval["evaluated_at_local"],
+        schedule_timezone=schedule_eval["timezone"],
+    )
+    if not schedule_eval["should_send"]:
+        log_event(
+            runtime_log_file,
+            event_type="telegram_send_suppressed",
+            severity="info",
+            suppression_reasons=schedule_eval["reasons"],
+        )
+        return
 
     try:
         digest = build_digest(markdown, top_items_per_section=top_items_per_section)
@@ -506,6 +596,13 @@ def main() -> None:
     heartbeat_file.write_text(
         f"Last priority digest sent: {datetime.now().isoformat()}\n",
         encoding="utf-8",
+    )
+    _save_digest_state(
+        state_file,
+        {
+            "last_sent_at": datetime.now(tz=ZoneInfo("UTC")).isoformat(),
+            "last_schedule_evaluation": schedule_eval,
+        },
     )
 
     print("Sent Priority Governor Daily Brief to Telegram.")
