@@ -926,6 +926,7 @@ The system currently supports:
 * operational contradiction detection
 * generated operational snapshots
 * Telegram digest delivery
+* Natural language Telegram operational retrieval routing (see `docs/telegram-operational-routing.md`)
 * structured workflow taxonomy
 * regression testing
 * config-driven runtime behavior
