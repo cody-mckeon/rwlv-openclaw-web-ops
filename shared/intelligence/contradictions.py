@@ -146,7 +146,10 @@ def primary_normalized_section(task: Dict[str, Any]) -> str:
 
 
 def normalized_health(task: Dict[str, Any]) -> str:
-    return raw_health(task).strip().lower().replace(" ", "_")
+    health = raw_health(task)
+    if health == "No Health Status":
+        return "unknown"
+    return health.strip().lower().replace(" ", "_")
 
 
 def has_blocked_health(task: Dict[str, Any]) -> bool:
@@ -173,6 +176,7 @@ def classify_operational_task(task: Dict[str, Any]) -> Dict[str, Any]:
     return {
         "task_name": task_name(task),
         "task_gid": task_gid(task),
+        "raw_priority": raw_priority(task),
         "normalized_section": section,
         "normalized_sections": normalized_sections(task),
         "normalized_priority": priority,
@@ -211,45 +215,27 @@ def _signal(
     )
 
 
-def detect_p4_in_progress(task: Dict[str, Any]) -> List[OperationalSignal]:
-    facts = classify_operational_task(task)
-
-    if facts["normalized_priority"] != "p4":
-        return []
-    if facts["normalized_section"] != "in_progress":
-        return []
-
-    return [
-        _signal(
-            task,
-            signal_type="workflow_contradiction",
-            severity="medium",
-            rule_name="detect_p4_in_progress",
-            message="P4 task currently in progress.",
-        )
-    ]
-
-
-def detect_workflow_contradictions(tasks: Iterable[Dict[str, Any]]) -> List[OperationalSignal]:
+def detect_p4_in_progress(tasks: Iterable[Dict[str, Any]]) -> List[OperationalSignal]:
     signals: List[OperationalSignal] = []
 
     for task in tasks:
-        signals.extend(detect_p4_in_progress(task))
-def detect_p4_in_progress(tasks):
-    findings = []
-
-    for task in tasks:
-        priority = task.get("normalized_priority")
-        section = task.get("normalized_section")
-
-        if priority == "p4" and section == "in_progress":
-            findings.append(
-                OperationalSignal(
-                    signal_type="workflow_contradiction",
-                    severity="medium",
-                    task_name=task["name"],
-                    message="P4 task currently in progress."
-                )
+        facts = classify_operational_task(task)
+        if facts["normalized_priority"] != "p4":
+            continue
+        if facts["normalized_section"] != "in_progress":
+            continue
+        signals.append(
+            _signal(
+                task,
+                signal_type="workflow_contradiction",
+                severity="medium",
+                rule_name="detect_p4_in_progress",
+                message="P4 task currently in progress.",
             )
+        )
 
-    return findings
+    return signals
+
+
+def detect_workflow_contradictions(tasks: Iterable[Dict[str, Any]]) -> List[OperationalSignal]:
+    return detect_p4_in_progress(tasks)
